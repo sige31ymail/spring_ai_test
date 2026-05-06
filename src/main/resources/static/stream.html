@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Spring AI Stream Test</title>
+</head>
+<body>
+    <h1>Spring AI Stream Test</h1>
+
+    <input id="message" size="60" value="Spring AIとは何ですか？">
+    <button onclick="startStream()">送信</button>
+
+    <pre id="result"></pre>
+
+    <script>
+        let eventSource;
+
+        function startStream() {
+            const result = document.getElementById("result");
+            const message = document.getElementById("message").value;
+
+            result.textContent = "";
+
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource("/ai/stream?message=" + encodeURIComponent(message));
+
+            eventSource.onmessage = function(event) {
+                result.textContent += event.data;
+            };
+
+            eventSource.onerror = function() {
+                eventSource.close();
+            };
+        }
+    </script>
+</body>
+</html>
