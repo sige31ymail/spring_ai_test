@@ -13,3 +13,4 @@ spring:
 logging:
   level:
     org.springframework.ai.chat.client.advisor: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: TRACE
