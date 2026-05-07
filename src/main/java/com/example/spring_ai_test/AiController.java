@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import java.util.List;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
+import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.reader.markdown.MarkdownDocumentReader;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 
 @RestController
 public class AiController {
@@ -23,10 +32,16 @@ public class AiController {
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
     private static final Logger logger = LoggerFactory.getLogger(TenantProductSearchTools.class);
+    private final VectorStore vectorStore;
 
-    public AiController(ChatClient.Builder builder, ChatMemory chatMemory) {
+    public AiController(
+            ChatClient.Builder builder,
+            ChatMemory chatMemory,
+            VectorStore vectorStore) {
+
         this.chatClient = builder.build();
         this.chatMemory = chatMemory;
+        this.vectorStore = vectorStore;
     }
 
     private OllamaChatOptions fastOptions() {
@@ -255,5 +270,170 @@ public class AiController {
                 .call()
                 .entity(new ParameterizedTypeReference<List<LearningItem>>() {
                 });
+    }
+
+    @GetMapping("/ai/rag/load")
+    public String loadRagDocuments() {
+
+        List<Document> documents = List.of(
+                new Document("""
+                    Spring AIは、Spring BootアプリケーションからLLM、Embedding、VectorStore、Tool Callingなどを扱うためのフレームワークです。
+                    ChatClientを使うことで、AIモデルとの会話を簡潔に実装できます。
+                    """),
+                new Document("""
+                    Tool Callingは、AIモデルが必要に応じてJavaメソッドを呼び出す仕組みです。
+                    外部API、DB検索、計算処理などをAIから利用できます。
+                    """),
+                new Document("""
+                    RAGはRetrieval Augmented Generationの略です。
+                    ユーザーの質問に関連する文書をVectorStoreから検索し、その検索結果をプロンプトに追加して回答します。
+                    """)
+        );
+
+        vectorStore.add(documents);
+
+        return "RAG documents loaded: " + documents.size();
+    }
+
+    @GetMapping("/ai/rag/ask")
+    public String askRag(
+            @RequestParam(defaultValue = "RAGとは何ですか？") String message) {
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(QuestionAnswerAdvisor.builder(vectorStore).build())
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    回答は、提供された参考情報を優先して日本語で簡潔に説明してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
+    }
+
+    @GetMapping("/ai/rag/strict")
+    public String askRagStrict(
+            @RequestParam(defaultValue = "RAGとは何ですか？") String message,
+            @RequestParam(defaultValue = "0.50") double threshold) {
+
+        var strictRagAdvisor = RetrievalAugmentationAdvisor.builder()
+                .documentRetriever(VectorStoreDocumentRetriever.builder()
+                        .vectorStore(vectorStore)
+                        .similarityThreshold(threshold)
+                        .topK(3)
+                        .build())
+                .queryAugmenter(ContextualQueryAugmenter.builder()
+                        .allowEmptyContext(false)
+                        .build())
+                .build();
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(strictRagAdvisor)
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    提供された参考情報だけを根拠に回答してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
+    }
+
+    @GetMapping("/ai/rag/load-metadata")
+    public String loadRagDocumentsWithMetadata() {
+
+        List<Document> documents = List.of(
+                new Document("""
+                    Spring AIは、Spring BootアプリケーションからLLM、Embedding、VectorStore、Tool Callingなどを扱うためのフレームワークです。
+                    ChatClientを使うことで、AIモデルとの会話を簡潔に実装できます。
+                    """,
+                        Map.of("category", "basic")),
+                new Document("""
+                    Tool Callingは、AIモデルが必要に応じてJavaメソッドを呼び出す仕組みです。
+                    外部API、DB検索、計算処理などをAIから利用できます。
+                    ToolContextを使うと、AIに直接見せない内部情報をToolへ渡せます。
+                    """,
+                        Map.of("category", "tool")),
+                new Document("""
+                    RAGはRetrieval Augmented Generationの略です。
+                    ユーザーの質問に関連する文書をVectorStoreから検索し、その検索結果をプロンプトに追加して回答します。
+                    Embeddingモデルは文書や質問をベクトル化するために使います。
+                    """,
+                        Map.of("category", "rag")),
+                new Document("""
+                    Structured Outputは、AIの回答をStringではなくJavaのrecordやDTOとして受け取る仕組みです。
+                    entity(Class) や entity(ParameterizedTypeReference) を使います。
+                    """,
+                        Map.of("category", "structured"))
+        );
+
+        vectorStore.add(documents);
+
+        return "metadata付きRAG documents loaded: " + documents.size();
+    }
+
+    @GetMapping("/ai/rag/ask-category")
+    public String askRagByCategory(
+            @RequestParam(defaultValue = "rag") String category,
+            @RequestParam(defaultValue = "RAGとは何ですか？") String message) {
+
+        var searchRequest = SearchRequest.builder()
+                .similarityThreshold(0.50)
+                .topK(3)
+                .filterExpression("category == '" + category + "'")
+                .build();
+
+        var advisor = QuestionAnswerAdvisor.builder(vectorStore)
+                .searchRequest(searchRequest)
+                .build();
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(advisor)
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    提供された参考情報だけを根拠に、日本語で簡潔に回答してください。
+                    参考情報にない内容は「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
+    }
+
+    @GetMapping("/ai/rag/load-md")
+    public String loadMarkdownRagDocuments() {
+
+        var reader = new MarkdownDocumentReader("classpath:/docs/spring-ai-notes.md");
+
+        List<Document> documents = reader.get();
+
+        List<Document> splitDocuments = new TokenTextSplitter()
+                .apply(documents);
+
+        vectorStore.add(splitDocuments);
+
+        return "Markdown RAG documents loaded: original="
+                + documents.size()
+                + ", split="
+                + splitDocuments.size();
+    }
+
+    @GetMapping("/ai/rag/ask-md")
+    public String askMarkdownRag(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(QuestionAnswerAdvisor.builder(vectorStore).build())
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    回答は、読み込まれたMarkdownの内容を優先して日本語で簡潔に説明してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
     }
 }
