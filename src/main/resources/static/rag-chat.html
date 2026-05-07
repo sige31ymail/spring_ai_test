@@ -79,6 +79,18 @@
         .loading {
             color: #777;
         }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        pre {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 6px;
+        }
     </style>
 </head>
 <body>
@@ -112,10 +124,11 @@
 
     <textarea id="message" placeholder="質問を入力してください">ToolContextとは何ですか？</textarea>
     <br>
-    <button onclick="sendMessage()">送信</button>
+    <button id="sendButton" onclick="sendMessage()">送信</button>
 
     <script>
         async function sendMessage() {
+            const sendButton = document.getElementById("sendButton");
             const chatBox = document.getElementById("chatBox");
             const messageInput = document.getElementById("message");
             const mode = document.getElementById("mode").value;
@@ -128,6 +141,9 @@
                 alert("質問を入力してください。");
                 return;
             }
+
+            sendButton.disabled = true;
+            sendButton.textContent = "送信中...";
 
             appendMessage("user", message);
 
@@ -194,11 +210,26 @@
                     const item = document.createElement("div");
                     item.className = "source-item";
 
-                    item.textContent =
+                    const summary = document.createElement("div");
+                    summary.textContent =
                         `fileName: ${source.fileName || ""}\n` +
                         `title: ${source.title || ""}\n` +
                         `score: ${source.score}\n` +
                         `distance: ${source.distance}`;
+
+                    const details = document.createElement("details");
+                    const detailsSummary = document.createElement("summary");
+                    detailsSummary.textContent = "本文を表示";
+
+                    const pre = document.createElement("pre");
+                    pre.textContent = source.text || "";
+                    pre.style.whiteSpace = "pre-wrap";
+
+                    details.appendChild(detailsSummary);
+                    details.appendChild(pre);
+
+                    item.appendChild(summary);
+                    item.appendChild(details);
 
                     sources.appendChild(item);
                 });
@@ -209,6 +240,12 @@
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
+
+        document.getElementById("message").addEventListener("keydown", function (event) {
+            if (event.ctrlKey && event.key === "Enter") {
+                sendMessage();
+            }
+        });
     </script>
 </body>
 </html>
