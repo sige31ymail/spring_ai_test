@@ -279,6 +279,7 @@ public class AiController {
                 });
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/load")
     public String loadRagDocuments() {
 
@@ -302,6 +303,7 @@ public class AiController {
         return "RAG documents loaded: " + documents.size();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask")
     public String askRag(
             @RequestParam(defaultValue = "RAGとは何ですか？") String message) {
@@ -319,6 +321,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/strict")
     public String askRagStrict(
             @RequestParam(defaultValue = "RAGとは何ですか？") String message,
@@ -348,6 +351,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/load-metadata")
     public String loadRagDocumentsWithMetadata() {
 
@@ -381,6 +385,7 @@ public class AiController {
         return "metadata付きRAG documents loaded: " + documents.size();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-category")
     public String askRagByCategory(
             @RequestParam(defaultValue = "rag") String category,
@@ -409,6 +414,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/load-md")
     public String loadMarkdownRagDocuments() {
 
@@ -427,6 +433,7 @@ public class AiController {
                 + splitDocuments.size();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md")
     public String askMarkdownRag(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
@@ -466,6 +473,7 @@ public class AiController {
                         .build());
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/search-md-simple")
     public List<RagSearchResult> searchMarkdownRagSimple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
@@ -486,6 +494,7 @@ public class AiController {
                 .toList();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/load-md-utf8")
     public String loadMarkdownRagDocumentsUtf8() throws IOException {
 
@@ -513,6 +522,7 @@ public class AiController {
                 + splitDocuments.size();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/search-md-utf8-simple")
     public List<RagSearchResult> searchMarkdownRagUtf8Simple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
@@ -534,6 +544,7 @@ public class AiController {
                 .toList();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md-utf8")
     public String askMarkdownRagUtf8(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
@@ -562,6 +573,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/load-md-utf8-sections")
     public String loadMarkdownRagDocumentsUtf8Sections() throws IOException {
 
@@ -621,6 +633,7 @@ public class AiController {
         return documents;
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/search-md-utf8-sections-simple")
     public List<RagSearchResult> searchMarkdownRagUtf8SectionsSimple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -644,6 +657,7 @@ public class AiController {
                 .toList();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md-utf8-sections")
     public String askMarkdownRagUtf8Sections(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -674,6 +688,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/store-check")
     public List<RagSearchResult> checkVectorStore() {
 
@@ -693,6 +708,7 @@ public class AiController {
                 .toList();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md-with-sources")
     public RagAnswerWithSources askMarkdownRagWithSources(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -750,6 +766,7 @@ public class AiController {
         return new RagAnswerWithSources(answer, sources);
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md-with-citations")
     public RagAnswerWithSources askMarkdownRagWithCitations(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -819,6 +836,7 @@ public class AiController {
         return new RagAnswerWithSources(answerWithCitations, sources);
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/search-md-dir-simple")
     public List<RagFileSearchResult> searchMarkdownDirectorySimple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -843,6 +861,7 @@ public class AiController {
                 .toList();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/ask-md-dir")
     public RagAnswerWithSources askMarkdownDirectory(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
