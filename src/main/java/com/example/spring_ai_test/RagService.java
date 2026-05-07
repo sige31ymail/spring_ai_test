@@ -16,6 +16,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 
 @Service
 public class RagService {
@@ -151,6 +152,13 @@ public class RagService {
                 doc.getScore(),
                 doc.getMetadata().get("distance"),
                 doc.getText()))
+                .collect(Collectors.toMap(
+                        source -> source.fileName() + "\n" + source.title() + "\n" + source.text(),
+                        source -> source,
+                        (first, duplicate) -> first,
+                        LinkedHashMap::new))
+                .values()
+                .stream()
                 .toList();
     }
 
