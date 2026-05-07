@@ -28,11 +28,7 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.core.io.ClassPathResource;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-
-import org.springframework.core.io.ClassPathResource;
 
 @RestController
 public class AiController {
@@ -624,13 +620,15 @@ public class AiController {
 
     @GetMapping("/ai/rag/search-md-utf8-sections-simple")
     public List<RagSearchResult> searchMarkdownRagUtf8SectionsSimple(
-            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
 
         List<Document> documents = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(message)
-                        .topK(5)
-                        .similarityThreshold(0.0)
+                        .topK(topK)
+                        .similarityThreshold(threshold)
                         .filterExpression("source == 'spring-ai-notes-md-utf8-sections'")
                         .build());
 
@@ -645,12 +643,14 @@ public class AiController {
 
     @GetMapping("/ai/rag/ask-md-utf8-sections")
     public String askMarkdownRagUtf8Sections(
-            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
 
         var searchRequest = SearchRequest.builder()
                 .query(message)
-                .topK(5)
-                .similarityThreshold(0.0)
+                .topK(topK)
+                .similarityThreshold(threshold)
                 .filterExpression("source == 'spring-ai-notes-md-utf8-sections'")
                 .build();
 
