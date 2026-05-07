@@ -56,7 +56,7 @@ public class RagController {
     @GetMapping("/search-md-dir-simple")
     public List<RagFileSearchResult> searchMarkdownDirectorySimple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
-            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "10") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         return ragService.searchAll(message, topK, threshold);
@@ -65,7 +65,7 @@ public class RagController {
     @GetMapping("/ask-md-dir")
     public RagFileAnswerWithSources askMarkdownDirectory(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
-            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "10") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         return ragService.askAll(message, topK, threshold);
