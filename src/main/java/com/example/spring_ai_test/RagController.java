@@ -52,4 +52,22 @@ public class RagController {
 
         return ragService.askByFile(fileName, message, topK, threshold);
     }
+
+    @GetMapping("/search-md-dir-simple")
+    public List<RagFileSearchResult> searchMarkdownDirectorySimple(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
+
+        return ragService.searchAll(message, topK, threshold);
+    }
+
+    @GetMapping("/ask-md-dir")
+    public RagFileAnswerWithSources askMarkdownDirectory(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
+
+        return ragService.askAll(message, topK, threshold);
+    }
 }
