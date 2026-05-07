@@ -34,6 +34,8 @@ import java.nio.file.Path;
 
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @RestController
 public class AiController {
@@ -775,5 +777,74 @@ public class AiController {
                 .content();
 
         return new RagAnswerWithSources(answer, sources);
+    }
+
+    @GetMapping("/ai/rag/ask-md-with-citations")
+    public RagAnswerWithSources askMarkdownRagWithCitations(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(topK)
+                        .similarityThreshold(threshold)
+                        .filterExpression("source == 'spring-ai-notes-md-utf8-sections'")
+                        .build());
+
+        List<RagSearchResult> sources = documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .collect(Collectors.toMap(
+                        RagSearchResult::text,
+                        source -> source,
+                        (first, duplicate) -> first,
+                        LinkedHashMap::new))
+                .values()
+                .stream()
+                .toList();
+
+        if (sources.isEmpty()) {
+            return new RagAnswerWithSources("参考情報にはありません。", sources);
+        }
+
+        String context = sources.stream()
+                .map(source -> "タイトル: " + source.title() + "\n本文:\n" + source.text())
+                .collect(Collectors.joining("\n\n---\n\n"));
+
+        String answer = chatClient.prompt()
+                .options(structuredOptions())
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    必ず参考情報だけを根拠に回答してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    回答は日本語で簡潔にしてください。
+                    """)
+                .user(u -> u
+                .text("""
+                            質問:
+                            {message}
+
+                            参考情報:
+                            {context}
+                            """)
+                .param("message", message)
+                .param("context", context))
+                .call()
+                .content();
+
+        String sourceTitles = sources.stream()
+                .map(RagSearchResult::title)
+                .filter(title -> !title.isBlank())
+                .distinct()
+                .collect(Collectors.joining(", "));
+
+        String answerWithCitations = answer + "\n\n参照元: " + sourceTitles;
+
+        return new RagAnswerWithSources(answerWithCitations, sources);
     }
 }
