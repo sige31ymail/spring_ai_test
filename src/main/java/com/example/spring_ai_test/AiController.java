@@ -699,4 +699,23 @@ public class AiController {
 
         return "VectorStore loaded from: " + path.toAbsolutePath();
     }
+
+    @GetMapping("/ai/rag/store-check")
+    public List<RagSearchResult> checkVectorStore() {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query("Spring AI")
+                        .topK(10)
+                        .similarityThreshold(0.0)
+                        .build());
+
+        return documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+    }
 }
