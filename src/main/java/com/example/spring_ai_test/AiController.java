@@ -29,6 +29,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.core.io.ClassPathResource;
 import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 
 @RestController
 public class AiController {
@@ -36,12 +40,12 @@ public class AiController {
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
     private static final Logger logger = LoggerFactory.getLogger(TenantProductSearchTools.class);
-    private final VectorStore vectorStore;
+    private final SimpleVectorStore vectorStore;
 
     public AiController(
             ChatClient.Builder builder,
             ChatMemory chatMemory,
-            VectorStore vectorStore) {
+            SimpleVectorStore vectorStore) {
 
         this.chatClient = builder.build();
         this.chatMemory = chatMemory;
@@ -669,5 +673,30 @@ public class AiController {
                 .user(message)
                 .call()
                 .content();
+    }
+
+    @GetMapping("/ai/rag/save-store")
+    public String saveVectorStore() throws IOException {
+
+        Path path = Path.of("data", "simple-vector-store.json");
+        Files.createDirectories(path.getParent());
+
+        vectorStore.save(path.toFile());
+
+        return "VectorStore saved to: " + path.toAbsolutePath();
+    }
+
+    @GetMapping("/ai/rag/load-store")
+    public String loadVectorStore() throws IOException {
+
+        Path path = Path.of("data", "simple-vector-store.json");
+
+        if (!Files.exists(path)) {
+            return "VectorStore file not found: " + path.toAbsolutePath();
+        }
+
+        vectorStore.load(path.toFile());
+
+        return "VectorStore loaded from: " + path.toAbsolutePath();
     }
 }
