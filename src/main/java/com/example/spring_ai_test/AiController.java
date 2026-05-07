@@ -458,4 +458,24 @@ public class AiController {
                         .similarityThreshold(0.0)
                         .build());
     }
+
+    @GetMapping("/ai/rag/search-md-simple")
+    public List<RagSearchResult> searchMarkdownRagSimple(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(5)
+                        .similarityThreshold(0.0)
+                        .build());
+
+        return documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+    }
 }
