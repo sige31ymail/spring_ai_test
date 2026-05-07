@@ -25,6 +25,9 @@ import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.reader.markdown.MarkdownDocumentReader;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import org.springframework.core.io.ClassPathResource;
 
 @RestController
 public class AiController {
@@ -477,5 +480,81 @@ public class AiController {
                 doc.getMetadata().get("distance"),
                 doc.getText()))
                 .toList();
+    }
+
+    @GetMapping("/ai/rag/load-md-utf8")
+    public String loadMarkdownRagDocumentsUtf8() throws IOException {
+
+        var resource = new ClassPathResource("docs/spring-ai-notes.md");
+
+        String markdown;
+        try (var inputStream = resource.getInputStream()) {
+            markdown = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        List<Document> documents = List.of(
+                new Document(
+                        markdown,
+                        Map.of("source", "spring-ai-notes-md-utf8"))
+        );
+
+        List<Document> splitDocuments = new TokenTextSplitter()
+                .apply(documents);
+
+        vectorStore.add(splitDocuments);
+
+        return "UTF-8 Markdown RAG documents loaded: original="
+                + documents.size()
+                + ", split="
+                + splitDocuments.size();
+    }
+
+    @GetMapping("/ai/rag/search-md-utf8-simple")
+    public List<RagSearchResult> searchMarkdownRagUtf8Simple(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(5)
+                        .similarityThreshold(0.0)
+                        .filterExpression("source == 'spring-ai-notes-md-utf8'")
+                        .build());
+
+        return documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+    }
+
+    @GetMapping("/ai/rag/ask-md-utf8")
+    public String askMarkdownRagUtf8(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        var searchRequest = SearchRequest.builder()
+                .query(message)
+                .topK(5)
+                .similarityThreshold(0.0)
+                .filterExpression("source == 'spring-ai-notes-md-utf8'")
+                .build();
+
+        var advisor = QuestionAnswerAdvisor.builder(vectorStore)
+                .searchRequest(searchRequest)
+                .build();
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(advisor)
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    提供されたMarkdownの参考情報だけを根拠に、日本語で簡潔に回答してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
     }
 }
