@@ -31,6 +31,7 @@ import java.util.ArrayList;
 
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @RestController
 public class AiController {
@@ -39,18 +40,15 @@ public class AiController {
     private final ChatMemory chatMemory;
     private static final Logger logger = LoggerFactory.getLogger(TenantProductSearchTools.class);
     private final SimpleVectorStore vectorStore;
-    private final RagService ragService;
 
     public AiController(
             ChatClient.Builder builder,
             ChatMemory chatMemory,
-            SimpleVectorStore vectorStore,
-            RagService ragService) {
+            SimpleVectorStore vectorStore) {
 
         this.chatClient = builder.build();
         this.chatMemory = chatMemory;
         this.vectorStore = vectorStore;
-        this.ragService = ragService;
     }
 
     private OllamaChatOptions fastOptions() {
@@ -676,16 +674,6 @@ public class AiController {
                 .content();
     }
 
-    @GetMapping("/ai/rag/save-store")
-    public String saveVectorStore() throws IOException {
-        return ragService.saveStore();
-    }
-
-    @GetMapping("/ai/rag/load-store")
-    public String loadVectorStore() throws IOException {
-        return ragService.loadStore();
-    }
-
     @GetMapping("/ai/rag/store-check")
     public List<RagSearchResult> checkVectorStore() {
 
@@ -831,11 +819,6 @@ public class AiController {
         return new RagAnswerWithSources(answerWithCitations, sources);
     }
 
-    @GetMapping("/ai/rag/load-md-dir")
-    public String loadMarkdownDirectory() throws IOException {
-        return ragService.loadMarkdownDirectory();
-    }
-
     @GetMapping("/ai/rag/search-md-dir-simple")
     public List<RagFileSearchResult> searchMarkdownDirectorySimple(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
@@ -930,23 +913,4 @@ public class AiController {
         };
     }
 
-    @GetMapping("/ai/rag/search-md-file-simple")
-    public List<RagFileSearchResult> searchMarkdownFileSimple(
-            @RequestParam(defaultValue = "spring-ai-tools.md") String fileName,
-            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
-            @RequestParam(defaultValue = "5") int topK,
-            @RequestParam(defaultValue = "0.0") double threshold) {
-
-        return ragService.searchByFile(fileName, message, topK, threshold);
-    }
-
-    @GetMapping("/ai/rag/ask-md-file")
-    public RagAnswerWithSources askMarkdownFile(
-            @RequestParam(defaultValue = "spring-ai-tools.md") String fileName,
-            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
-            @RequestParam(defaultValue = "5") int topK,
-            @RequestParam(defaultValue = "0.0") double threshold) {
-
-        return ragService.askByFile(fileName, message, topK, threshold);
-    }
 }
