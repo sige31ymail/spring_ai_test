@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/ai/rag")
@@ -69,5 +71,47 @@ public class RagController {
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         return ragService.askAll(message, topK, threshold);
+    }
+
+    @PostMapping("/ask-md-dir")
+    public RagFileAnswerWithSources askMarkdownDirectoryPost(
+            @RequestBody RagAskRequest request) {
+
+        String message = request.message() != null
+                ? request.message()
+                : "ToolContextとは何ですか？";
+
+        int topK = request.topK() != null
+                ? request.topK()
+                : 10;
+
+        double threshold = request.threshold() != null
+                ? request.threshold()
+                : 0.0;
+
+        return ragService.askAll(message, topK, threshold);
+    }
+
+    @PostMapping("/ask-md-file")
+    public RagFileAnswerWithSources askMarkdownFilePost(
+            @RequestBody RagAskRequest request) {
+
+        String fileName = request.fileName() != null
+                ? request.fileName()
+                : "spring-ai-tools.md";
+
+        String message = request.message() != null
+                ? request.message()
+                : "ToolContextとは何ですか？";
+
+        int topK = request.topK() != null
+                ? request.topK()
+                : 5;
+
+        double threshold = request.threshold() != null
+                ? request.threshold()
+                : 0.0;
+
+        return ragService.askByFile(fileName, message, topK, threshold);
     }
 }

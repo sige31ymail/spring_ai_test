@@ -187,14 +187,32 @@
             const startTime = performance.now();
             try {
                 let url;
+                let body;
 
                 if (mode === "file") {
-                    url = `/ai/rag/ask-md-file?fileName=${encodeURIComponent(fileName)}&message=${encodeURIComponent(message)}&topK=${encodeURIComponent(topK)}&threshold=0.0`;
+                    url = "/ai/rag/ask-md-file";
+                    body = {
+                        fileName: fileName,
+                        message: message,
+                        topK: Number(topK),
+                        threshold: 0.0
+                    };
                 } else {
-                    url = `/ai/rag/ask-md-dir?message=${encodeURIComponent(message)}&topK=${encodeURIComponent(topK)}&threshold=0.0`;
+                    url = "/ai/rag/ask-md-dir";
+                    body = {
+                        message: message,
+                        topK: Number(topK),
+                        threshold: 0.0
+                    };
                 }
 
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(body)
+                });
 
                 if (!response.ok) {
                     throw new Error(`HTTP error: ${response.status}`);
