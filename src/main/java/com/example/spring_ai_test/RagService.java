@@ -10,6 +10,12 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.stereotype.Service;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 
 @Service
 public class RagService {
@@ -30,6 +36,98 @@ public class RagService {
                 .build();
     }
 
+    public String loadMarkdownDirectory() throws IOException {
+
+        Path docsDir = Path.of("src", "main", "resources", "docs");
+
+        if (!Files.exists(docsDir)) {
+            return "docs directory not found: " + docsDir.toAbsolutePath();
+        }
+
+        List<Document> allDocuments = new ArrayList<>();
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(docsDir, "*.md")) {
+            for (Path mdPath : stream) {
+                String markdown = Files.readString(mdPath, StandardCharsets.UTF_8);
+                String fileName = mdPath.getFileName().toString();
+
+                List<Document> documents = splitMarkdownByH2WithFileName(markdown, fileName);
+                allDocuments.addAll(documents);
+            }
+        }
+
+        vectorStore.add(allDocuments);
+
+        return "Markdown directory loaded: " + allDocuments.size();
+    }
+
+    public String saveStore() throws IOException {
+
+        Path path = Path.of("data", "simple-vector-store.json");
+        Files.createDirectories(path.getParent());
+
+        vectorStore.save(path.toFile());
+
+        return "VectorStore saved to: " + path.toAbsolutePath();
+    }
+
+    public String loadStore() throws IOException {
+
+        Path path = Path.of("data", "simple-vector-store.json");
+
+        if (!Files.exists(path)) {
+            return "VectorStore file not found: " + path.toAbsolutePath();
+        }
+
+        vectorStore.load(path.toFile());
+
+        return "VectorStore loaded from: " + path.toAbsolutePath();
+    }
+
+    private List<Document> splitMarkdownByH2WithFileName(String markdown, String fileName) {
+
+        List<Document> documents = new ArrayList<>();
+
+        String currentTitle = null;
+        StringBuilder currentText = new StringBuilder();
+
+        for (String line : markdown.split("\\R")) {
+
+            if (line.startsWith("## ")) {
+
+                if (currentTitle != null && currentText.length() > 0) {
+                    documents.add(new Document(
+                            currentText.toString().trim(),
+                            Map.of(
+                                    "source", "docs-dir",
+                                    "fileName", fileName,
+                                    "title", currentTitle)));
+                }
+
+                currentTitle = line.substring(3).trim();
+                currentText = new StringBuilder();
+
+                currentText.append("file: ").append(fileName).append("\n");
+                currentText.append(line).append("\n");
+            } else {
+                if (currentTitle != null) {
+                    currentText.append(line).append("\n");
+                }
+            }
+        }
+
+        if (currentTitle != null && currentText.length() > 0) {
+            documents.add(new Document(
+                    currentText.toString().trim(),
+                    Map.of(
+                            "source", "docs-dir",
+                            "fileName", fileName,
+                            "title", currentTitle)));
+        }
+
+        return documents;
+    }
+
     public List<RagFileSearchResult> searchByFile(
             String fileName,
             String message,
@@ -48,11 +146,11 @@ public class RagService {
 
         return documents.stream()
                 .map(doc -> new RagFileSearchResult(
-                        String.valueOf(doc.getMetadata().getOrDefault("fileName", "")),
-                        String.valueOf(doc.getMetadata().getOrDefault("title", "")),
-                        doc.getScore(),
-                        doc.getMetadata().get("distance"),
-                        doc.getText()))
+                String.valueOf(doc.getMetadata().getOrDefault("fileName", "")),
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
                 .toList();
     }
 
@@ -74,10 +172,10 @@ public class RagService {
 
         List<RagSearchResult> sources = documents.stream()
                 .map(doc -> new RagSearchResult(
-                        String.valueOf(doc.getMetadata().getOrDefault("title", "")),
-                        doc.getScore(),
-                        doc.getMetadata().get("distance"),
-                        doc.getText()))
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
                 .toList();
 
         if (documents.isEmpty()) {
@@ -104,15 +202,15 @@ public class RagService {
                         回答は日本語で簡潔にしてください。
                         """)
                 .user(u -> u
-                        .text("""
+                .text("""
                                 質問:
                                 {message}
 
                                 参考情報:
                                 {context}
                                 """)
-                        .param("message", message)
-                        .param("context", context))
+                .param("message", message)
+                .param("context", context))
                 .call()
                 .content();
 
@@ -121,10 +219,10 @@ public class RagService {
 
     private String normalizeDocFileName(String fileName) {
         return switch (fileName) {
-            case "spring-ai-notes.md",
-                 "spring-ai-tools.md",
-                 "spring-ai-rag.md" -> fileName;
-            default -> "spring-ai-notes.md";
+            case "spring-ai-notes.md", "spring-ai-tools.md", "spring-ai-rag.md" ->
+                fileName;
+            default ->
+                "spring-ai-notes.md";
         };
     }
 }

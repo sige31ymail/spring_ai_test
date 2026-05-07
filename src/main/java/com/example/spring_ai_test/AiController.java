@@ -9,7 +9,6 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,14 +28,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.core.io.ClassPathResource;
 import java.util.ArrayList;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import org.springframework.ai.vectorstore.SimpleVectorStore;
-import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
-import java.util.stream.Collectors;
-import java.nio.file.DirectoryStream;
 
 @RestController
 public class AiController {
@@ -684,27 +678,12 @@ public class AiController {
 
     @GetMapping("/ai/rag/save-store")
     public String saveVectorStore() throws IOException {
-
-        Path path = Path.of("data", "simple-vector-store.json");
-        Files.createDirectories(path.getParent());
-
-        vectorStore.save(path.toFile());
-
-        return "VectorStore saved to: " + path.toAbsolutePath();
+        return ragService.saveStore();
     }
 
     @GetMapping("/ai/rag/load-store")
     public String loadVectorStore() throws IOException {
-
-        Path path = Path.of("data", "simple-vector-store.json");
-
-        if (!Files.exists(path)) {
-            return "VectorStore file not found: " + path.toAbsolutePath();
-        }
-
-        vectorStore.load(path.toFile());
-
-        return "VectorStore loaded from: " + path.toAbsolutePath();
+        return ragService.loadStore();
     }
 
     @GetMapping("/ai/rag/store-check")
@@ -854,73 +833,7 @@ public class AiController {
 
     @GetMapping("/ai/rag/load-md-dir")
     public String loadMarkdownDirectory() throws IOException {
-
-        Path docsDir = Path.of("src", "main", "resources", "docs");
-
-        if (!Files.exists(docsDir)) {
-            return "docs directory not found: " + docsDir.toAbsolutePath();
-        }
-
-        List<Document> allDocuments = new ArrayList<>();
-
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(docsDir, "*.md")) {
-            for (Path mdPath : stream) {
-                String markdown = Files.readString(mdPath, StandardCharsets.UTF_8);
-                String fileName = mdPath.getFileName().toString();
-
-                List<Document> documents = splitMarkdownByH2WithFileName(markdown, fileName);
-
-                allDocuments.addAll(documents);
-            }
-        }
-
-        vectorStore.add(allDocuments);
-
-        return "Markdown directory loaded: " + allDocuments.size();
-    }
-
-    private List<Document> splitMarkdownByH2WithFileName(String markdown, String fileName) {
-
-        List<Document> documents = new ArrayList<>();
-
-        String currentTitle = null;
-        StringBuilder currentText = new StringBuilder();
-
-        for (String line : markdown.split("\\R")) {
-
-            if (line.startsWith("## ")) {
-
-                if (currentTitle != null && currentText.length() > 0) {
-                    documents.add(new Document(
-                            currentText.toString().trim(),
-                            Map.of(
-                                    "source", "docs-dir",
-                                    "fileName", fileName,
-                                    "title", currentTitle)));
-                }
-
-                currentTitle = line.substring(3).trim();
-                currentText = new StringBuilder();
-
-                currentText.append("file: ").append(fileName).append("\n");
-                currentText.append(line).append("\n");
-            } else {
-                if (currentTitle != null) {
-                    currentText.append(line).append("\n");
-                }
-            }
-        }
-
-        if (currentTitle != null && currentText.length() > 0) {
-            documents.add(new Document(
-                    currentText.toString().trim(),
-                    Map.of(
-                            "source", "docs-dir",
-                            "fileName", fileName,
-                            "title", currentTitle)));
-        }
-
-        return documents;
+        return ragService.loadMarkdownDirectory();
     }
 
     @GetMapping("/ai/rag/search-md-dir-simple")
