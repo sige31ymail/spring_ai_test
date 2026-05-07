@@ -36,6 +36,7 @@ import org.springframework.ai.vectorstore.SimpleVectorStore;
 import java.util.stream.Collectors;
 import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
+import java.nio.file.DirectoryStream;
 
 @RestController
 public class AiController {
@@ -846,5 +847,161 @@ public class AiController {
         String answerWithCitations = answer + "\n\n参照元: " + sourceTitles;
 
         return new RagAnswerWithSources(answerWithCitations, sources);
+    }
+
+    @GetMapping("/ai/rag/load-md-dir")
+    public String loadMarkdownDirectory() throws IOException {
+
+        Path docsDir = Path.of("src", "main", "resources", "docs");
+
+        if (!Files.exists(docsDir)) {
+            return "docs directory not found: " + docsDir.toAbsolutePath();
+        }
+
+        List<Document> allDocuments = new ArrayList<>();
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(docsDir, "*.md")) {
+            for (Path mdPath : stream) {
+                String markdown = Files.readString(mdPath, StandardCharsets.UTF_8);
+                String fileName = mdPath.getFileName().toString();
+
+                List<Document> documents = splitMarkdownByH2WithFileName(markdown, fileName);
+
+                allDocuments.addAll(documents);
+            }
+        }
+
+        vectorStore.add(allDocuments);
+
+        return "Markdown directory loaded: " + allDocuments.size();
+    }
+
+    private List<Document> splitMarkdownByH2WithFileName(String markdown, String fileName) {
+
+        List<Document> documents = new ArrayList<>();
+
+        String currentTitle = null;
+        StringBuilder currentText = new StringBuilder();
+
+        for (String line : markdown.split("\\R")) {
+
+            if (line.startsWith("## ")) {
+
+                if (currentTitle != null && currentText.length() > 0) {
+                    documents.add(new Document(
+                            currentText.toString().trim(),
+                            Map.of(
+                                    "source", "docs-dir",
+                                    "fileName", fileName,
+                                    "title", currentTitle)));
+                }
+
+                currentTitle = line.substring(3).trim();
+                currentText = new StringBuilder();
+
+                currentText.append("file: ").append(fileName).append("\n");
+                currentText.append(line).append("\n");
+            } else {
+                if (currentTitle != null) {
+                    currentText.append(line).append("\n");
+                }
+            }
+        }
+
+        if (currentTitle != null && currentText.length() > 0) {
+            documents.add(new Document(
+                    currentText.toString().trim(),
+                    Map.of(
+                            "source", "docs-dir",
+                            "fileName", fileName,
+                            "title", currentTitle)));
+        }
+
+        return documents;
+    }
+
+    @GetMapping("/ai/rag/search-md-dir-simple")
+    public List<RagFileSearchResult> searchMarkdownDirectorySimple(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(topK)
+                        .similarityThreshold(threshold)
+                        .filterExpression("source == 'docs-dir'")
+                        .build());
+
+        return documents.stream()
+                .map(doc -> new RagFileSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("fileName", "")),
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+    }
+
+    @GetMapping("/ai/rag/ask-md-dir")
+    public RagAnswerWithSources askMarkdownDirectory(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(defaultValue = "0.0") double threshold) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(topK)
+                        .similarityThreshold(threshold)
+                        .filterExpression("source == 'docs-dir'")
+                        .build());
+
+        List<RagSearchResult> sources = documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+
+        if (documents.isEmpty()) {
+            return new RagAnswerWithSources("参考情報にはありません。", sources);
+        }
+
+        String context = documents.stream()
+                .map(doc -> {
+                    String fileName = String.valueOf(doc.getMetadata().getOrDefault("fileName", ""));
+                    String title = String.valueOf(doc.getMetadata().getOrDefault("title", ""));
+
+                    return "ファイル: " + fileName
+                            + "\nタイトル: " + title
+                            + "\n本文:\n" + doc.getText();
+                })
+                .collect(java.util.stream.Collectors.joining("\n\n---\n\n"));
+
+        String answer = chatClient.prompt()
+                .options(structuredOptions())
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    必ず参考情報だけを根拠に回答してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    回答は日本語で簡潔にしてください。
+                    """)
+                .user(u -> u
+                .text("""
+                            質問:
+                            {message}
+
+                            参考情報:
+                            {context}
+                            """)
+                .param("message", message)
+                .param("context", context))
+                .call()
+                .content();
+
+        return new RagAnswerWithSources(answer, sources);
     }
 }
