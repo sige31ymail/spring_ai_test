@@ -237,7 +237,7 @@ public class RagService {
                         source -> source.fileName() + "\n" + source.title() + "\n" + source.text(),
                         source -> source,
                         (first, duplicate) -> first,
-                        java.util.LinkedHashMap::new))
+                        LinkedHashMap::new))
                 .values()
                 .stream()
                 .toList();
