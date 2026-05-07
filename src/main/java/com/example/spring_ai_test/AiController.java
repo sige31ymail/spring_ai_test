@@ -28,6 +28,11 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.core.io.ClassPathResource;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+
+import org.springframework.core.io.ClassPathResource;
 
 @RestController
 public class AiController {
@@ -539,6 +544,114 @@ public class AiController {
                 .topK(5)
                 .similarityThreshold(0.0)
                 .filterExpression("source == 'spring-ai-notes-md-utf8'")
+                .build();
+
+        var advisor = QuestionAnswerAdvisor.builder(vectorStore)
+                .searchRequest(searchRequest)
+                .build();
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .advisors(advisor)
+                .system("""
+                    あなたはSpring AIの学習アシスタントです。
+                    提供されたMarkdownの参考情報だけを根拠に、日本語で簡潔に回答してください。
+                    参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
+                    """)
+                .user(message)
+                .call()
+                .content();
+    }
+
+    @GetMapping("/ai/rag/load-md-utf8-sections")
+    public String loadMarkdownRagDocumentsUtf8Sections() throws IOException {
+
+        var resource = new ClassPathResource("docs/spring-ai-notes.md");
+
+        String markdown;
+        try (var inputStream = resource.getInputStream()) {
+            markdown = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+
+        List<Document> documents = splitMarkdownByH2(markdown);
+
+        vectorStore.add(documents);
+
+        return "UTF-8 Markdown sections loaded: " + documents.size();
+    }
+
+    private List<Document> splitMarkdownByH2(String markdown) {
+
+        List<Document> documents = new ArrayList<>();
+
+        String currentTitle = null;
+        StringBuilder currentText = new StringBuilder();
+
+        for (String line : markdown.split("\\R")) {
+
+            if (line.startsWith("## ")) {
+
+                if (currentTitle != null && currentText.length() > 0) {
+                    documents.add(new Document(
+                            currentText.toString().trim(),
+                            Map.of(
+                                    "source", "spring-ai-notes-md-utf8-sections",
+                                    "title", currentTitle)));
+                }
+
+                currentTitle = line.substring(3).trim();
+                currentText = new StringBuilder();
+
+                // タイトルも本文に含める。検索精度を上げるため。
+                currentText.append(line).append("\n");
+            } else {
+                if (currentTitle != null) {
+                    currentText.append(line).append("\n");
+                }
+            }
+        }
+
+        if (currentTitle != null && currentText.length() > 0) {
+            documents.add(new Document(
+                    currentText.toString().trim(),
+                    Map.of(
+                            "source", "spring-ai-notes-md-utf8-sections",
+                            "title", currentTitle)));
+        }
+
+        return documents;
+    }
+
+    @GetMapping("/ai/rag/search-md-utf8-sections-simple")
+    public List<RagSearchResult> searchMarkdownRagUtf8SectionsSimple(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(5)
+                        .similarityThreshold(0.0)
+                        .filterExpression("source == 'spring-ai-notes-md-utf8-sections'")
+                        .build());
+
+        return documents.stream()
+                .map(doc -> new RagSearchResult(
+                String.valueOf(doc.getMetadata().getOrDefault("title", "")),
+                doc.getScore(),
+                doc.getMetadata().get("distance"),
+                doc.getText()))
+                .toList();
+    }
+
+    @GetMapping("/ai/rag/ask-md-utf8-sections")
+    public String askMarkdownRagUtf8Sections(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        var searchRequest = SearchRequest.builder()
+                .query(message)
+                .topK(5)
+                .similarityThreshold(0.0)
+                .filterExpression("source == 'spring-ai-notes-md-utf8-sections'")
                 .build();
 
         var advisor = QuestionAnswerAdvisor.builder(vectorStore)
