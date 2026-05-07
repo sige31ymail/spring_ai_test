@@ -1,22 +1,21 @@
 package com.example.spring_ai_test;
 
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.http.MediaType;
+
 import reactor.core.publisher.Flux;
-import java.util.Map;
-import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
+import org.springframework.core.ParameterizedTypeReference;
 
 @RestController
 public class AiController {
@@ -34,6 +33,14 @@ public class AiController {
         return OllamaChatOptions.builder()
                 .temperature(0.3)
                 .numPredict(128)
+                .disableThinking()
+                .build();
+    }
+
+    private OllamaChatOptions structuredOptions() {
+        return OllamaChatOptions.builder()
+                .temperature(0.1)
+                .numPredict(512)
                 .disableThinking()
                 .build();
     }
@@ -64,9 +71,9 @@ public class AiController {
         return chatClient.prompt()
                 .options(fastOptions())
                 .user(u -> u
-                        .text("{level}向けに、{topic}を3行で説明してください。")
-                        .param("level", level)
-                        .param("topic", topic))
+                .text("{level}向けに、{topic}を3行で説明してください。")
+                .param("level", level)
+                .param("topic", topic))
                 .call()
                 .content();
     }
@@ -76,13 +83,13 @@ public class AiController {
         return chatClient.prompt()
                 .options(fastOptions())
                 .user(u -> u
-                        .text("""
+                .text("""
                                 次の内容を要約してください。
                                 title と summary を持つ形式で返してください。
                                 summary は3行以内にしてください。
                                 内容: {message}
                                 """)
-                        .param("message", message))
+                .param("message", message))
                 .call()
                 .entity(SummaryResponse.class);
     }
@@ -210,5 +217,43 @@ public class AiController {
                 .tools(new DirectProductTools())
                 .call()
                 .content();
+    }
+
+    @GetMapping("/ai/structured/review")
+    public ReviewAnalysis structuredReview(
+            @RequestParam(defaultValue = "商品は便利ですが、配送が遅くて少し不満です。") String message) {
+
+        return chatClient.prompt()
+                .options(fastOptions())
+                .system("""
+                        あなたはレビュー分析アシスタントです。
+                        レビュー内容を分析してください。
+                        sentiment は positive, neutral, negative のいずれかにしてください。
+                        score は1から5の整数にしてください。
+                        needsFollowUp は人間の確認が必要なら true にしてください。
+                        """)
+                .user(u -> u
+                .text("次のレビューを分析してください: {message}")
+                .param("message", message))
+                .call()
+                .entity(ReviewAnalysis.class);
+    }
+
+    @GetMapping("/ai/structured/list")
+    public List<LearningItem> structuredList(
+            @RequestParam(defaultValue = "Spring AIの初心者が次に学ぶべき内容") String message) {
+
+        return chatClient.prompt()
+                .options(structuredOptions())
+                .system("""
+                    あなたはJava学習計画を作るアシスタントです。
+                    学習項目を3件返してください。
+                    priority は 1 が最重要、3 が低めです。
+                    余計な説明文は出力しないでください。
+                    """)
+                .user(message)
+                .call()
+                .entity(new ParameterizedTypeReference<List<LearningItem>>() {
+                });
     }
 }
