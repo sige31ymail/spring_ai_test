@@ -91,10 +91,40 @@
             padding: 8px;
             border-radius: 6px;
         }
+
+        .store-panel {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .store-panel button {
+            margin-left: 8px;
+            margin-top: 0;
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .store-status {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #555;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
     <h1>Spring AI RAG Chat</h1>
+
+    <div class="store-panel">
+        <strong>VectorStore操作</strong>
+        <button type="button" onclick="loadStore()">保存済みVectorStoreを読み込む</button>
+        <button type="button" onclick="loadMarkdownDir()">Markdownを読み込む</button>
+        <button type="button" onclick="saveStore()">VectorStoreを保存する</button>
+        <div id="storeStatus" class="store-status"></div>
+    </div>
 
     <div class="controls">
         <label>
@@ -248,6 +278,41 @@
                 sendMessage();
             }
         });
+
+        async function callStoreEndpoint(path) {
+            const status = document.getElementById("storeStatus");
+            status.textContent = "実行中...";
+
+            try {
+                const response = await fetch(path);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+
+                const text = await response.text();
+                status.textContent = text;
+
+            } catch (error) {
+                status.textContent = "エラーが発生しました: " + error.message;
+            }
+        }
+
+        function loadStore() {
+            callStoreEndpoint("/ai/rag/load-store");
+        }
+
+        function loadMarkdownDir() {
+            if (!confirm("MarkdownをVectorStoreに追加します。既に読み込み済みの場合は重複する可能性があります。実行しますか？")) {
+                return;
+            }
+
+            callStoreEndpoint("/ai/rag/load-md-dir");
+        }
+
+        function saveStore() {
+            callStoreEndpoint("/ai/rag/save-store");
+        }
     </script>
 </body>
 </html>
