@@ -44,7 +44,7 @@ public class RagController {
     }
 
     @GetMapping("/ask-md-file")
-    public RagAnswerWithSources askMarkdownFile(
+    public RagFileAnswerWithSources askMarkdownFile(
             @RequestParam(defaultValue = "spring-ai-tools.md") String fileName,
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
             @RequestParam(defaultValue = "5") int topK,
