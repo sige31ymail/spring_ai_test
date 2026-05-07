@@ -128,9 +128,8 @@
 
     <script>
         async function sendMessage() {
-            const sendButton = document.getElementById("sendButton");
-            const chatBox = document.getElementById("chatBox");
             const messageInput = document.getElementById("message");
+            const sendButton = document.getElementById("sendButton");
             const mode = document.getElementById("mode").value;
             const fileName = document.getElementById("fileName").value;
             const topK = document.getElementById("topK").value;
@@ -167,11 +166,14 @@
                 const data = await response.json();
 
                 loadingElement.remove();
-
                 appendAnswer(data);
 
             } catch (error) {
                 loadingElement.textContent = "エラーが発生しました: " + error.message;
+
+            } finally {
+                sendButton.disabled = false;
+                sendButton.textContent = "送信";
             }
         }
 
