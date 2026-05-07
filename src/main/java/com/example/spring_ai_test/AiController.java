@@ -461,6 +461,7 @@ public class AiController {
                 .content();
     }
 
+    @Deprecated
     @GetMapping("/ai/rag/search-md")
     public List<Document> searchMarkdownRag(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
