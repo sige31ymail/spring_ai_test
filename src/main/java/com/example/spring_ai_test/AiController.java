@@ -424,16 +424,38 @@ public class AiController {
     public String askMarkdownRag(
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
 
+        var searchRequest = SearchRequest.builder()
+                .query(message)
+                .topK(5)
+                .similarityThreshold(0.0)
+                .build();
+
+        var advisor = QuestionAnswerAdvisor.builder(vectorStore)
+                .searchRequest(searchRequest)
+                .build();
+
         return chatClient.prompt()
                 .options(structuredOptions())
-                .advisors(QuestionAnswerAdvisor.builder(vectorStore).build())
+                .advisors(advisor)
                 .system("""
                     あなたはSpring AIの学習アシスタントです。
-                    回答は、読み込まれたMarkdownの内容を優先して日本語で簡潔に説明してください。
+                    提供されたMarkdownの参考情報だけを根拠に、日本語で簡潔に回答してください。
                     参考情報にない内容は、推測せず「参考情報にはありません」と答えてください。
                     """)
                 .user(message)
                 .call()
                 .content();
+    }
+
+    @GetMapping("/ai/rag/search-md")
+    public List<Document> searchMarkdownRag(
+            @RequestParam(defaultValue = "ToolContextとは何ですか？") String message) {
+
+        return vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(message)
+                        .topK(10)
+                        .similarityThreshold(0.0)
+                        .build());
     }
 }
