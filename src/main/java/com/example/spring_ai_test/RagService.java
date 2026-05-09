@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.document.Document;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RagService {
 
+    private static final Logger logger = LoggerFactory.getLogger(RagService.class);
     private final ChatClient chatClient;
     private final SimpleVectorStore vectorStore;
 
@@ -201,6 +204,9 @@ public class RagService {
 
         String safeFileName = normalizeDocFileName(fileName);
 
+        logger.info("RAG search by file start: fileName={}, safeFileName={}, message={}, topK={}, threshold={}",
+                fileName, safeFileName, message, topK, threshold);
+
         List<Document> documents = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(message)
@@ -209,7 +215,11 @@ public class RagService {
                         .filterExpression("source == 'docs-dir' && fileName == '" + safeFileName + "'")
                         .build());
 
-        return toRagFileSearchResults(documents);
+        List<RagFileSearchResult> results = toRagFileSearchResults(documents);
+
+        logSearchResults("RAG search by file", results);
+
+        return results;
     }
 
     public RagFileAnswerWithSources askByFile(
@@ -237,6 +247,9 @@ public class RagService {
             int topK,
             double threshold) {
 
+        logger.info("RAG search all start: message={}, topK={}, threshold={}",
+                message, topK, threshold);
+
         List<Document> documents = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(message)
@@ -245,7 +258,28 @@ public class RagService {
                         .filterExpression("source == 'docs-dir'")
                         .build());
 
-        return toRagFileSearchResults(documents);
+        List<RagFileSearchResult> results = toRagFileSearchResults(documents);
+
+        logSearchResults("RAG search all", results);
+
+        return results;
+    }
+
+    private void logSearchResults(String label, List<RagFileSearchResult> results) {
+
+        logger.info("{} completed: resultCount={}", label, results.size());
+
+        for (int i = 0; i < results.size(); i++) {
+            RagFileSearchResult result = results.get(i);
+
+            logger.info("{} result[{}]: fileName={}, title={}, score={}, distance={}",
+                    label,
+                    i + 1,
+                    result.fileName(),
+                    result.title(),
+                    result.score(),
+                    result.distance());
+        }
     }
 
     public RagFileAnswerWithSources askAll(
