@@ -169,6 +169,7 @@
     <textarea id="message" placeholder="質問を入力してください">ToolContextとは何ですか？</textarea>
     <br>
     <button id="sendButton" onclick="sendMessage()">送信</button>
+    <button type="button" onclick="searchOnly()">検索のみ</button>
     <button type="button" onclick="clearChat()">履歴クリア</button>
 
     <script>
@@ -375,6 +376,97 @@
 
         document.getElementById("mode").addEventListener("change", updateFileNameControl);
         updateFileNameControl();
+
+        async function searchOnly() {
+            const mode = document.getElementById("mode").value;
+            const fileName = document.getElementById("fileName").value;
+            const topK = document.getElementById("topK").value;
+            const threshold = document.getElementById("threshold").value;
+            const messageInput = document.getElementById("message");
+
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                alert("質問を入力してください。");
+                return;
+            }
+
+            appendMessage("user", "[検索のみ] " + message);
+
+            const loadingElement = appendMessage("assistant loading", "検索中...");
+
+            try {
+                let url;
+
+                if (mode === "file") {
+                    url = `/ai/rag/search-md-file-simple?fileName=${encodeURIComponent(fileName)}&message=${encodeURIComponent(message)}&topK=${encodeURIComponent(topK)}&threshold=${encodeURIComponent(threshold)}`;
+                } else {
+                    url = `/ai/rag/search-md-dir-simple?message=${encodeURIComponent(message)}&topK=${encodeURIComponent(topK)}&threshold=${encodeURIComponent(threshold)}`;
+                }
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+
+                const sources = await response.json();
+
+                loadingElement.remove();
+                appendSearchResults(sources);
+
+            } catch (error) {
+                loadingElement.textContent = "エラーが発生しました: " + error.message;
+            }
+        }
+
+        function appendSearchResults(sources) {
+            const chatBox = document.getElementById("chatBox");
+
+            const div = document.createElement("div");
+            div.className = "message assistant";
+
+            const title = document.createElement("div");
+            title.textContent = `検索結果: ${sources.length} 件`;
+            div.appendChild(title);
+
+            if (sources.length === 0) {
+                const empty = document.createElement("div");
+                empty.textContent = "該当する文書はありません。";
+                div.appendChild(empty);
+            }
+
+            sources.forEach(source => {
+                const item = document.createElement("div");
+                item.className = "source-item";
+
+                const summary = document.createElement("div");
+                summary.textContent =
+                    `fileName: ${source.fileName || ""}\n` +
+                    `title: ${source.title || ""}\n` +
+                    `score: ${source.score}\n` +
+                    `distance: ${source.distance}`;
+
+                const details = document.createElement("details");
+                const detailsSummary = document.createElement("summary");
+                detailsSummary.textContent = "本文を表示";
+
+                const pre = document.createElement("pre");
+                pre.textContent = source.text || "";
+                pre.style.whiteSpace = "pre-wrap";
+
+                details.appendChild(detailsSummary);
+                details.appendChild(pre);
+
+                item.appendChild(summary);
+                item.appendChild(details);
+
+                div.appendChild(item);
+            });
+
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
     </script>
 </body>
 
