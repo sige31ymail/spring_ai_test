@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <title>Spring AI RAG Chat</title>
@@ -67,7 +68,8 @@
             cursor: pointer;
         }
 
-        select, input {
+        select,
+        input {
             padding: 6px;
             margin-right: 8px;
         }
@@ -121,6 +123,7 @@
         }
     </style>
 </head>
+
 <body>
     <h1>Spring AI RAG Chat</h1>
 
@@ -154,6 +157,11 @@
             topK:
             <input id="topK" type="number" value="10" min="1" max="20">
         </label>
+
+        <label>
+            threshold:
+            <input id="threshold" type="number" value="0.0" min="0" max="1" step="0.05">
+        </label>
     </div>
 
     <div id="chatBox" class="chat-box"></div>
@@ -170,8 +178,9 @@
             const mode = document.getElementById("mode").value;
             const fileName = document.getElementById("fileName").value;
             const topK = document.getElementById("topK").value;
-            
+
             const message = messageInput.value.trim();
+            const threshold = document.getElementById("threshold").value;
 
             if (!message) {
                 alert("質問を入力してください。");
@@ -195,14 +204,14 @@
                         fileName: fileName,
                         message: message,
                         topK: Number(topK),
-                        threshold: 0.0
+                        threshold: Number(threshold)
                     };
                 } else {
                     url = "/ai/rag/ask-md-dir";
                     body = {
                         message: message,
                         topK: Number(topK),
-                        threshold: 0.0
+                        threshold: Number(threshold)
                     };
                 }
 
@@ -351,4 +360,5 @@
         }
     </script>
 </body>
+
 </html>
