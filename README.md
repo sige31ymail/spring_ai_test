@@ -13,8 +13,10 @@ Spring Boot と Spring AI を使った学習用プロジェクトです。
 - Markdown RAG
 - SimpleVectorStore
 - RAG Chat Page
+- Observability / Actuator
 
-## RAG関連ドキュメント
+## ドキュメント
 
 - [RAG Endpoints](docs/rag-endpoints.md)
 - [RAG Chat Page](docs/rag-chat.md)
+- [Observability](docs/observability.md)
