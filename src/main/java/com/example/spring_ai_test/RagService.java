@@ -1,15 +1,5 @@
 package com.example.spring_ai_test;
 
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.ollama.api.OllamaChatOptions;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
-import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -17,6 +7,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.stereotype.Service;
 
 @Service
 public class RagService {
@@ -169,6 +170,7 @@ public class RagService {
 
         String answer = chatClient.prompt()
                 .options(ragOptions())
+                .advisors(new SimpleLoggerAdvisor())
                 .system("""
                     あなたはSpring AIの学習アシスタントです。
                     必ず参考情報だけを根拠に回答してください。
