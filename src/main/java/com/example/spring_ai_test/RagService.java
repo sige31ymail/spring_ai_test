@@ -27,6 +27,7 @@ public class RagService {
     private static final Logger logger = LoggerFactory.getLogger(RagService.class);
     private final ChatClient chatClient;
     private final SimpleVectorStore vectorStore;
+    private boolean markdownDirectoryLoaded = false;
 
     public RagService(ChatClient.Builder builder, SimpleVectorStore vectorStore) {
         this.chatClient = builder.build();
@@ -42,6 +43,11 @@ public class RagService {
     }
 
     public String loadMarkdownDirectory() throws IOException {
+
+        if (markdownDirectoryLoaded) {
+            logger.warn("RAG markdown directory already loaded. Skip loading.");
+            return "Markdown directory already loaded. Skip loading.";
+        }
 
         Path docsDir = Path.of("src", "main", "resources", "docs");
 
@@ -62,7 +68,9 @@ public class RagService {
         }
 
         vectorStore.add(allDocuments);
+        markdownDirectoryLoaded = true;
 
+        logger.info("RAG markdown directory loaded: documentCount={}", allDocuments.size());
         return "Markdown directory loaded: " + allDocuments.size();
     }
 
@@ -85,7 +93,9 @@ public class RagService {
         }
 
         vectorStore.load(path.toFile());
+        markdownDirectoryLoaded = true;
 
+        logger.info("RAG VectorStore loaded: path={}", path.toAbsolutePath());
         return "VectorStore loaded from: " + path.toAbsolutePath();
     }
 
