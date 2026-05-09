@@ -358,6 +358,23 @@
             const chatBox = document.getElementById("chatBox");
             chatBox.innerHTML = "";
         }
+
+        function updateFileNameControl() {
+            const mode = document.getElementById("mode").value;
+            const fileName = document.getElementById("fileName");
+            const fileNameLabel = document.getElementById("fileNameLabel");
+
+            if (mode === "file") {
+                fileName.disabled = false;
+                fileNameLabel.style.opacity = "1.0";
+            } else {
+                fileName.disabled = true;
+                fileNameLabel.style.opacity = "0.5";
+            }
+        }
+
+        document.getElementById("mode").addEventListener("change", updateFileNameControl);
+        updateFileNameControl();
     </script>
 </body>
 
