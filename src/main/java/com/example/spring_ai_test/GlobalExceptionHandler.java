@@ -13,6 +13,19 @@ public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(InvalidRagRequestException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidRagRequestException(
+            InvalidRagRequestException exception) {
+
+        logger.warn("Invalid RAG request: {}", exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        "INVALID_RAG_REQUEST",
+                        exception.getMessage()));
+    }
+
     @ExceptionHandler(ResourceAccessException.class)
     public ResponseEntity<ApiErrorResponse> handleResourceAccessException(
             ResourceAccessException exception) {

@@ -4,11 +4,11 @@ import java.io.IOException;
 import java.util.List;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping("/ai/rag")
@@ -42,6 +42,8 @@ public class RagController {
             @RequestParam(defaultValue = "5") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
 
+        validateRagRequest(message, topK, threshold);
+
         return ragService.searchByFile(fileName, message, topK, threshold);
     }
 
@@ -52,6 +54,8 @@ public class RagController {
             @RequestParam(defaultValue = "5") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
 
+        validateRagRequest(message, topK, threshold);
+
         return ragService.askByFile(fileName, message, topK, threshold);
     }
 
@@ -61,6 +65,8 @@ public class RagController {
             @RequestParam(defaultValue = "10") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
 
+        validateRagRequest(message, topK, threshold);
+
         return ragService.searchAll(message, topK, threshold);
     }
 
@@ -69,6 +75,8 @@ public class RagController {
             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
             @RequestParam(defaultValue = "10") int topK,
             @RequestParam(defaultValue = "0.0") double threshold) {
+
+        validateRagRequest(message, topK, threshold);
 
         return ragService.askAll(message, topK, threshold);
     }
@@ -89,6 +97,7 @@ public class RagController {
                 ? request.threshold()
                 : 0.0;
 
+        validateRagRequest(message, topK, threshold);
         return ragService.askAll(message, topK, threshold);
     }
 
@@ -112,6 +121,22 @@ public class RagController {
                 ? request.threshold()
                 : 0.0;
 
+        validateRagRequest(message, topK, threshold);
         return ragService.askByFile(fileName, message, topK, threshold);
+    }
+
+    private void validateRagRequest(String message, int topK, double threshold) {
+
+        if (message == null || message.isBlank()) {
+            throw new InvalidRagRequestException("messageは必須です。");
+        }
+
+        if (topK < 1 || topK > 20) {
+            throw new InvalidRagRequestException("topKは1以上20以下で指定してください。");
+        }
+
+        if (threshold < 0.0 || threshold > 1.0) {
+            throw new InvalidRagRequestException("thresholdは0.0以上1.0以下で指定してください。");
+        }
     }
 }
