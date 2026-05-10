@@ -14,6 +14,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 - RAGチャット画面でエラー内容を表示しやすい
 - Observabilityの `error` タグと突き合わせやすい
 - Ollama停止時などの障害原因を切り分けやすい
+- 入力値不正を400 Bad Requestとして明確に返せる
 
 ---
 
@@ -21,6 +22,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 
 | 例外 | HTTPステータス | code | message |
 |---|---:|---|---|
+| `InvalidRagRequestException` | 400 | `INVALID_RAG_REQUEST` | 入力値に応じたエラーメッセージ |
 | `ResourceAccessException` | 503 | `AI_SERVICE_UNAVAILABLE` | AIサービスに接続できません。Ollamaが起動しているか確認してください。 |
 | `Exception` | 500 | `INTERNAL_SERVER_ERROR` | 予期しないエラーが発生しました。ログを確認してください。 |
 
@@ -53,6 +55,31 @@ public record ApiErrorResponse(
 
 ---
 
+### InvalidRagRequestException
+
+RAGリクエストの入力値が不正な場合に投げる例外。
+
+```java
+package com.example.spring_ai_test;
+
+public class InvalidRagRequestException extends RuntimeException {
+
+    public InvalidRagRequestException(String message) {
+        super(message);
+    }
+}
+```
+
+主に以下の場合に使う。
+
+| 入力値 | 条件 |
+|---|---|
+| `message` | 空文字、null、空白のみは不可 |
+| `topK` | 1以上20以下 |
+| `threshold` | 0.0以上1.0以下 |
+
+---
+
 ### GlobalExceptionHandler
 
 `@RestControllerAdvice` を使って、Controller内で発生した例外を共通的に処理する。
@@ -72,6 +99,19 @@ import org.springframework.web.client.ResourceAccessException;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(InvalidRagRequestException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidRagRequestException(
+            InvalidRagRequestException exception) {
+
+        logger.warn("Invalid RAG request: {}", exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        "INVALID_RAG_REQUEST",
+                        exception.getMessage()));
+    }
 
     @ExceptionHandler(ResourceAccessException.class)
     public ResponseEntity<ApiErrorResponse> handleResourceAccessException(
@@ -99,6 +139,85 @@ public class GlobalExceptionHandler {
     }
 }
 ```
+
+---
+
+## 入力値バリデーション
+
+`RagController` では、RAGリクエストの入力値をチェックしている。
+
+```java
+private void validateRagRequest(String message, int topK, double threshold) {
+
+    if (message == null || message.isBlank()) {
+        throw new InvalidRagRequestException("messageは必須です。");
+    }
+
+    if (topK < 1 || topK > 20) {
+        throw new InvalidRagRequestException("topKは1以上20以下で指定してください。");
+    }
+
+    if (threshold < 0.0 || threshold > 1.0) {
+        throw new InvalidRagRequestException("thresholdは0.0以上1.0以下で指定してください。");
+    }
+}
+```
+
+### topK不正
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=0&threshold=0.0"
+```
+
+レスポンス。
+
+```json
+{
+  "code": "INVALID_RAG_REQUEST",
+  "message": "topKは1以上20以下で指定してください。"
+}
+```
+
+### threshold不正
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=1.5"
+```
+
+レスポンス。
+
+```json
+{
+  "code": "INVALID_RAG_REQUEST",
+  "message": "thresholdは0.0以上1.0以下で指定してください。"
+}
+```
+
+### message空
+
+```powershell
+$body = @{
+  message = ""
+  topK = 10
+  threshold = 0.0
+} | ConvertTo-Json
+
+curl.exe -i `
+  -X POST "http://localhost:8080/ai/rag/ask-md-dir" `
+  -H "Content-Type: application/json; charset=utf-8" `
+  -d $body
+```
+
+レスポンス。
+
+```json
+{
+  "code": "INVALID_RAG_REQUEST",
+  "message": "messageは必須です。"
+}
+```
+
+`Invoke-RestMethod` はHTTP 400を例外扱いにするため、レスポンス本文を見たい場合は `curl.exe -i` を使うと分かりやすい。
 
 ---
 
@@ -178,10 +297,14 @@ if (errorData && errorData.message) {
 }
 ```
 
-そのため、Ollama停止時などは画面に次のように表示される。
+そのため、Ollama停止時や入力値不正時は画面に次のように表示される。
 
 ```text
 エラーが発生しました: AIサービスに接続できません。Ollamaが起動しているか確認してください。 (AI_SERVICE_UNAVAILABLE)
+```
+
+```text
+エラーが発生しました: topKは1以上20以下で指定してください。 (INVALID_RAG_REQUEST)
 ```
 
 ---
@@ -231,6 +354,8 @@ curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
 }
 ```
 
+入力値不正はAIモデル呼び出し前にControllerで止まるため、通常は `gen_ai.client.operation` には記録されない。
+
 ---
 
 ## ChatClient / Advisor側にエラーが出ない場合
@@ -271,13 +396,20 @@ ChatClient呼び出し
 
 ## 確認手順まとめ
 
-### 1. Ollama起動中の正常系
+### 1. 入力値不正を確認する
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=0&threshold=0.0"
+curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=1.5"
+```
+
+### 2. Ollama起動中の正常系
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 2. Ollama停止確認
+### 3. Ollama停止確認
 
 ```powershell
 curl.exe http://localhost:11434/api/tags
@@ -285,13 +417,13 @@ curl.exe http://localhost:11434/api/tags
 
 接続できなければOllama停止状態。
 
-### 3. Ollama停止中にRAG回答を呼ぶ
+### 4. Ollama停止中にRAG回答を呼ぶ
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 4. エラーレスポンスを確認
+### 5. エラーレスポンスを確認
 
 期待値。
 
@@ -302,7 +434,7 @@ curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&th
 }
 ```
 
-### 5. メトリクスを確認
+### 6. メトリクスを確認
 
 ```powershell
 curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
@@ -314,14 +446,14 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 
 ## 今後の改善案
 
-現在は、`ResourceAccessException` とその他の `Exception` を扱っている。
+現在は、`InvalidRagRequestException`、`ResourceAccessException`、その他の `Exception` を扱っている。
 
 今後は、以下のようにエラー種別を増やすとよい。
 
 | 追加候補 | 目的 |
 |---|---|
 | JSON不正 | リクエストBodyの形式誤りを400で返す |
-| 入力値不正 | `topK` や `threshold` の不正値を400で返す |
+| 入力値不正の詳細化 | `fileName` の許可リストチェックなど、より細かい入力チェックを追加する |
 | モデル名不正 | Ollamaにモデルがない場合のエラーを分かりやすく返す |
 | VectorStore未読み込み | Markdown未読み込み時に専用エラーを返す |
 | タイムアウト | AI応答が遅すぎる場合に504相当で返す |
@@ -335,6 +467,8 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 ```text
 サーバ側
   → 例外を共通的にJSONへ変換
+  → 入力値不正は400として返す
+  → AIサービス接続失敗は503として返す
 
 UI側
   → APIエラーのmessage/codeを画面表示
