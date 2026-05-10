@@ -77,6 +77,7 @@ public class InvalidRagRequestException extends RuntimeException {
 | `message` | 空文字、null、空白のみは不可 |
 | `topK` | 1以上20以下 |
 | `threshold` | 0.0以上1.0以下 |
+| `fileName` | `spring-ai-notes.md`, `spring-ai-tools.md`, `spring-ai-rag.md` のいずれか |
 
 ---
 
@@ -163,6 +164,35 @@ private void validateRagRequest(String message, int topK, double threshold) {
 }
 ```
 
+ファイル指定RAGでは、`fileName` も許可リストでチェックする。
+
+```java
+private void validateRagFileName(String fileName) {
+
+    if (fileName == null || fileName.isBlank()) {
+        throw new InvalidRagRequestException("fileNameは必須です。");
+    }
+
+    if (!ALLOWED_FILE_NAMES.contains(fileName)) {
+        throw new InvalidRagRequestException(
+                "fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。");
+    }
+}
+```
+
+許可するファイル名。
+
+```java
+private static final Set<String> ALLOWED_FILE_NAMES = Set.of(
+        "spring-ai-notes.md",
+        "spring-ai-tools.md",
+        "spring-ai-rag.md");
+```
+
+---
+
+## 入力値不正の確認
+
 ### topK不正
 
 ```powershell
@@ -215,6 +245,37 @@ curl.exe -i `
   "code": "INVALID_RAG_REQUEST",
   "message": "messageは必須です。"
 }
+```
+
+### fileName不正
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/search-md-file-simple?fileName=unknown.md&message=ToolContext&topK=5&threshold=0.0"
+```
+
+レスポンス。
+
+```json
+{
+  "code": "INVALID_RAG_REQUEST",
+  "message": "fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。"
+}
+```
+
+POSTで確認する場合。
+
+```powershell
+$body = @{
+  fileName = "unknown.md"
+  message = "ToolContext"
+  topK = 5
+  threshold = 0.0
+} | ConvertTo-Json
+
+curl.exe -i `
+  -X POST "http://localhost:8080/ai/rag/ask-md-file" `
+  -H "Content-Type: application/json; charset=utf-8" `
+  -d $body
 ```
 
 `Invoke-RestMethod` はHTTP 400を例外扱いにするため、レスポンス本文を見たい場合は `curl.exe -i` を使うと分かりやすい。
@@ -305,6 +366,10 @@ if (errorData && errorData.message) {
 
 ```text
 エラーが発生しました: topKは1以上20以下で指定してください。 (INVALID_RAG_REQUEST)
+```
+
+```text
+エラーが発生しました: fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。 (INVALID_RAG_REQUEST)
 ```
 
 ---
@@ -401,6 +466,7 @@ ChatClient呼び出し
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=0&threshold=0.0"
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=1.5"
+curl.exe "http://localhost:8080/ai/rag/search-md-file-simple?fileName=unknown.md&message=ToolContext&topK=5&threshold=0.0"
 ```
 
 ### 2. Ollama起動中の正常系
@@ -453,7 +519,6 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 | 追加候補 | 目的 |
 |---|---|
 | JSON不正 | リクエストBodyの形式誤りを400で返す |
-| 入力値不正の詳細化 | `fileName` の許可リストチェックなど、より細かい入力チェックを追加する |
 | モデル名不正 | Ollamaにモデルがない場合のエラーを分かりやすく返す |
 | VectorStore未読み込み | Markdown未読み込み時に専用エラーを返す |
 | タイムアウト | AI応答が遅すぎる場合に504相当で返す |
