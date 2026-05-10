@@ -2,7 +2,6 @@ package com.example.spring_ai_test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,6 +18,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -49,22 +50,21 @@ public class RagService {
             return "Markdown directory already loaded. Skip loading.";
         }
 
-        Path docsDir = Path.of("src", "main", "resources", "docs");
+        var resolver = new PathMatchingResourcePatternResolver();
+        Resource[] resources = resolver.getResources("classpath:/docs/*.md");
 
-        if (!Files.exists(docsDir)) {
-            return "docs directory not found: " + docsDir.toAbsolutePath();
+        if (resources.length == 0) {
+            return "docs directory not found or no markdown files found in classpath:/docs/";
         }
 
         List<Document> allDocuments = new ArrayList<>();
 
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(docsDir, "*.md")) {
-            for (Path mdPath : stream) {
-                String markdown = Files.readString(mdPath, StandardCharsets.UTF_8);
-                String fileName = mdPath.getFileName().toString();
+        for (Resource resource : resources) {
+            String markdown = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String fileName = resource.getFilename();
 
-                List<Document> documents = splitMarkdownByH2WithFileName(markdown, fileName);
-                allDocuments.addAll(documents);
-            }
+            List<Document> documents = splitMarkdownByH2WithFileName(markdown, fileName);
+            allDocuments.addAll(documents);
         }
 
         vectorStore.add(allDocuments);
