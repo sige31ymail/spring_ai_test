@@ -40,15 +40,18 @@ public class AiController {
     private final ChatMemory chatMemory;
     private static final Logger logger = LoggerFactory.getLogger(AiController.class);
     private final SimpleVectorStore vectorStore;
+    private final DateTimeTools dateTimeTools;
 
     public AiController(
             ChatClient.Builder builder,
             ChatMemory chatMemory,
-            SimpleVectorStore vectorStore) {
+            SimpleVectorStore vectorStore,
+            DateTimeTools dateTimeTools) {
 
         this.chatClient = builder.build();
         this.chatMemory = chatMemory;
         this.vectorStore = vectorStore;
+        this.dateTimeTools = dateTimeTools;
     }
 
     private OllamaChatOptions fastOptions() {
@@ -167,7 +170,7 @@ public class AiController {
                 .options(fastOptions())
                 .system("必要な場合は利用可能なツールを使って回答してください。回答は日本語で簡潔にしてください。")
                 .user(message)
-                .tools(new DateTimeTools())
+                .tools(dateTimeTools)
                 .call()
                 .content();
     }
@@ -843,7 +846,6 @@ public class AiController {
 //             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
 //             @RequestParam(defaultValue = "5") int topK,
 //             @RequestParam(defaultValue = "0.0") double threshold) {
-
 //         List<Document> documents = vectorStore.similaritySearch(
 //                 SearchRequest.builder()
 //                         .query(message)
@@ -851,7 +853,6 @@ public class AiController {
 //                         .similarityThreshold(threshold)
 //                         .filterExpression("source == 'docs-dir'")
 //                         .build());
-
 //         return documents.stream()
 //                 .map(doc -> new RagFileSearchResult(
 //                 String.valueOf(doc.getMetadata().getOrDefault("fileName", "")),
@@ -861,14 +862,12 @@ public class AiController {
 //                 doc.getText()))
 //                 .toList();
 //     }
-
 //     @Deprecated
 //     @GetMapping("/ai/rag/ask-md-dir")
 //     public RagAnswerWithSources askMarkdownDirectory(
 //             @RequestParam(defaultValue = "ToolContextとは何ですか？") String message,
 //             @RequestParam(defaultValue = "5") int topK,
 //             @RequestParam(defaultValue = "0.0") double threshold) {
-
 //         List<Document> documents = vectorStore.similaritySearch(
 //                 SearchRequest.builder()
 //                         .query(message)
@@ -876,7 +875,6 @@ public class AiController {
 //                         .similarityThreshold(threshold)
 //                         .filterExpression("source == 'docs-dir'")
 //                         .build());
-
 //         List<RagSearchResult> sources = documents.stream()
 //                 .map(doc -> new RagSearchResult(
 //                 String.valueOf(doc.getMetadata().getOrDefault("title", "")),
@@ -884,22 +882,18 @@ public class AiController {
 //                 doc.getMetadata().get("distance"),
 //                 doc.getText()))
 //                 .toList();
-
 //         if (documents.isEmpty()) {
 //             return new RagAnswerWithSources("参考情報にはありません。", sources);
 //         }
-
 //         String context = documents.stream()
 //                 .map(doc -> {
 //                     String fileName = String.valueOf(doc.getMetadata().getOrDefault("fileName", ""));
 //                     String title = String.valueOf(doc.getMetadata().getOrDefault("title", ""));
-
 //                     return "ファイル: " + fileName
 //                             + "\nタイトル: " + title
 //                             + "\n本文:\n" + doc.getText();
 //                 })
 //                 .collect(java.util.stream.Collectors.joining("\n\n---\n\n"));
-
 //         String answer = chatClient.prompt()
 //                 .options(structuredOptions())
 //                 .system("""
@@ -912,7 +906,6 @@ public class AiController {
 //                 .text("""
 //                             質問:
 //                             {message}
-
 //                             参考情報:
 //                             {context}
 //                             """)
@@ -920,10 +913,8 @@ public class AiController {
 //                 .param("context", context))
 //                 .call()
 //                 .content();
-
 //         return new RagAnswerWithSources(answer, sources);
 //     }
-
 //     private String normalizeDocFileName(String fileName) {
 //         return switch (fileName) {
 //             case "spring-ai-notes.md", "spring-ai-tools.md", "spring-ai-rag.md" ->
@@ -932,5 +923,4 @@ public class AiController {
 //                 "spring-ai-notes.md";
 //         };
 //     }
-
 }
