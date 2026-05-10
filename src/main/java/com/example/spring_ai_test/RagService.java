@@ -243,15 +243,15 @@ public class RagService {
         return answerFromSources(message, sources);
     }
 
-private String normalizeDocFileName(String fileName) {
-    return switch (fileName) {
-        case "spring-ai-notes.md", "spring-ai-tools.md", "spring-ai-rag.md" ->
-            fileName;
-        default ->
-            throw new InvalidRagRequestException(
-                    "fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。");
-    };
-}
+    private String normalizeDocFileName(String fileName) {
+        return switch (fileName) {
+            case "spring-ai-notes.md", "spring-ai-tools.md", "spring-ai-rag.md" ->
+                fileName;
+            default ->
+                throw new InvalidRagRequestException(
+                        "fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。");
+        };
+    }
 
     public List<RagFileSearchResult> searchAll(
             String message,
