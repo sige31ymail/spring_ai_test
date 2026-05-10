@@ -14,9 +14,11 @@ Spring Boot と Spring AI を使った学習用プロジェクトです。
 - SimpleVectorStore
 - RAG Chat Page
 - Observability / Actuator
+- Error Handling
 
 ## ドキュメント
 
 - [RAG Endpoints](docs/rag-endpoints.md)
 - [RAG Chat Page](docs/rag-chat.md)
 - [Observability](docs/observability.md)
+- [Error Handling](docs/error-handling.md)
