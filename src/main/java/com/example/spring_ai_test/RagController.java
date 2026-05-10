@@ -2,6 +2,7 @@ package com.example.spring_ai_test;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/ai/rag")
 public class RagController {
+
+    private static final Set<String> ALLOWED_FILE_NAMES = Set.of(
+            "spring-ai-notes.md",
+            "spring-ai-tools.md",
+            "spring-ai-rag.md");
 
     private final RagService ragService;
 
@@ -43,7 +49,7 @@ public class RagController {
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         validateRagRequest(message, topK, threshold);
-
+        validateRagFileName(fileName);
         return ragService.searchByFile(fileName, message, topK, threshold);
     }
 
@@ -55,7 +61,7 @@ public class RagController {
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         validateRagRequest(message, topK, threshold);
-
+        validateRagFileName(fileName);
         return ragService.askByFile(fileName, message, topK, threshold);
     }
 
@@ -66,7 +72,6 @@ public class RagController {
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         validateRagRequest(message, topK, threshold);
-
         return ragService.searchAll(message, topK, threshold);
     }
 
@@ -77,7 +82,6 @@ public class RagController {
             @RequestParam(defaultValue = "0.0") double threshold) {
 
         validateRagRequest(message, topK, threshold);
-
         return ragService.askAll(message, topK, threshold);
     }
 
@@ -122,6 +126,7 @@ public class RagController {
                 : 0.0;
 
         validateRagRequest(message, topK, threshold);
+        validateRagFileName(fileName);
         return ragService.askByFile(fileName, message, topK, threshold);
     }
 
@@ -137,6 +142,18 @@ public class RagController {
 
         if (threshold < 0.0 || threshold > 1.0) {
             throw new InvalidRagRequestException("thresholdは0.0以上1.0以下で指定してください。");
+        }
+    }
+
+    private void validateRagFileName(String fileName) {
+
+        if (fileName == null || fileName.isBlank()) {
+            throw new InvalidRagRequestException("fileNameは必須です。");
+        }
+
+        if (!ALLOWED_FILE_NAMES.contains(fileName)) {
+            throw new InvalidRagRequestException(
+                    "fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。");
         }
     }
 }
