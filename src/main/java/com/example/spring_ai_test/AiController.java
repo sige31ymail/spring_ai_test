@@ -38,7 +38,7 @@ public class AiController {
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
-    private static final Logger logger = LoggerFactory.getLogger(TenantProductSearchTools.class);
+    private static final Logger logger = LoggerFactory.getLogger(AiController.class);
     private final SimpleVectorStore vectorStore;
 
     public AiController(
