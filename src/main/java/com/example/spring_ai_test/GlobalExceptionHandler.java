@@ -27,6 +27,19 @@ public class GlobalExceptionHandler {
                         exception.getMessage()));
     }
 
+    @ExceptionHandler(VectorStoreNotLoadedException.class)
+    public ResponseEntity<ApiErrorResponse> handleVectorStoreNotLoadedException(
+            VectorStoreNotLoadedException exception) {
+
+        logger.warn("VectorStore not loaded: {}", exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "VECTOR_STORE_NOT_LOADED",
+                        exception.getMessage()));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadableException(
             HttpMessageNotReadableException exception) {

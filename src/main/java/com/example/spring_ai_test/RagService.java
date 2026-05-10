@@ -213,6 +213,7 @@ public class RagService {
             double threshold) {
 
         String safeFileName = normalizeDocFileName(fileName);
+        ensureVectorStoreLoaded();
 
         logger.info("RAG search by file start: fileName={}, safeFileName={}, message={}, topK={}, threshold={}",
                 fileName, safeFileName, message, topK, threshold);
@@ -253,10 +254,19 @@ public class RagService {
         };
     }
 
+    private void ensureVectorStoreLoaded() {
+
+        if (!markdownDirectoryLoaded) {
+            throw new VectorStoreNotLoadedException(
+                    "VectorStoreが読み込まれていません。Markdownを読み込むか、保存済みVectorStoreを読み込んでください。");
+        }
+    }
+
     public List<RagFileSearchResult> searchAll(
             String message,
             int topK,
             double threshold) {
+        ensureVectorStoreLoaded();
 
         logger.info("RAG search all start: message={}, topK={}, threshold={}",
                 message, topK, threshold);
