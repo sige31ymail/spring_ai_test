@@ -14,7 +14,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 - RAGチャット画面でエラー内容を表示しやすい
 - Observabilityの `error` タグと突き合わせやすい
 - Ollama停止時などの障害原因を切り分けやすい
-- 入力値不正を400 Bad Requestとして明確に返せる
+- JSON不正や入力値不正を400 Bad Requestとして明確に返せる
 
 ---
 
@@ -22,6 +22,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 
 | 例外 | HTTPステータス | code | message |
 |---|---:|---|---|
+| `HttpMessageNotReadableException` | 400 | `INVALID_REQUEST_BODY` | リクエストBodyのJSON形式が不正です。 |
 | `InvalidRagRequestException` | 400 | `INVALID_RAG_REQUEST` | 入力値に応じたエラーメッセージ |
 | `ResourceAccessException` | 503 | `AI_SERVICE_UNAVAILABLE` | AIサービスに接続できません。Ollamaが起動しているか確認してください。 |
 | `Exception` | 500 | `INTERNAL_SERVER_ERROR` | 予期しないエラーが発生しました。ログを確認してください。 |
@@ -92,6 +93,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.ResourceAccessException;
@@ -112,6 +114,19 @@ public class GlobalExceptionHandler {
                 .body(new ApiErrorResponse(
                         "INVALID_RAG_REQUEST",
                         exception.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException exception) {
+
+        logger.warn("Invalid request body", exception);
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        "INVALID_REQUEST_BODY",
+                        "リクエストBodyのJSON形式が不正です。"));
     }
 
     @ExceptionHandler(ResourceAccessException.class)
@@ -138,6 +153,30 @@ public class GlobalExceptionHandler {
                         "INTERNAL_SERVER_ERROR",
                         "予期しないエラーが発生しました。ログを確認してください。"));
     }
+}
+```
+
+---
+
+## JSON不正の確認
+
+POSTのリクエストBodyが壊れている場合、Controllerの `@RequestBody` に変換する前に失敗する。
+
+この場合は `HttpMessageNotReadableException` を `400 Bad Request` として返す。
+
+```powershell
+curl.exe -i `
+  -X POST "http://localhost:8080/ai/rag/ask-md-dir" `
+  -H "Content-Type: application/json; charset=utf-8" `
+  -d "{ ""message"": ""ToolContext"", ""topK"": 10,"
+```
+
+レスポンス。
+
+```json
+{
+  "code": "INVALID_REQUEST_BODY",
+  "message": "リクエストBodyのJSON形式が不正です。"
 }
 ```
 
@@ -358,7 +397,11 @@ if (errorData && errorData.message) {
 }
 ```
 
-そのため、Ollama停止時や入力値不正時は画面に次のように表示される。
+そのため、JSON不正、Ollama停止、入力値不正時は画面に次のように表示される。
+
+```text
+エラーが発生しました: リクエストBodyのJSON形式が不正です。 (INVALID_REQUEST_BODY)
+```
 
 ```text
 エラーが発生しました: AIサービスに接続できません。Ollamaが起動しているか確認してください。 (AI_SERVICE_UNAVAILABLE)
@@ -419,7 +462,7 @@ curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
 }
 ```
 
-入力値不正はAIモデル呼び出し前にControllerで止まるため、通常は `gen_ai.client.operation` には記録されない。
+JSON不正や入力値不正はAIモデル呼び出し前にControllerまたはSpring MVC層で止まるため、通常は `gen_ai.client.operation` には記録されない。
 
 ---
 
@@ -461,7 +504,16 @@ ChatClient呼び出し
 
 ## 確認手順まとめ
 
-### 1. 入力値不正を確認する
+### 1. JSON不正を確認する
+
+```powershell
+curl.exe -i `
+  -X POST "http://localhost:8080/ai/rag/ask-md-dir" `
+  -H "Content-Type: application/json; charset=utf-8" `
+  -d "{ ""message"": ""ToolContext"", ""topK"": 10,"
+```
+
+### 2. 入力値不正を確認する
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=0&threshold=0.0"
@@ -469,13 +521,13 @@ curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&th
 curl.exe "http://localhost:8080/ai/rag/search-md-file-simple?fileName=unknown.md&message=ToolContext&topK=5&threshold=0.0"
 ```
 
-### 2. Ollama起動中の正常系
+### 3. Ollama起動中の正常系
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 3. Ollama停止確認
+### 4. Ollama停止確認
 
 ```powershell
 curl.exe http://localhost:11434/api/tags
@@ -483,13 +535,13 @@ curl.exe http://localhost:11434/api/tags
 
 接続できなければOllama停止状態。
 
-### 4. Ollama停止中にRAG回答を呼ぶ
+### 5. Ollama停止中にRAG回答を呼ぶ
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 5. エラーレスポンスを確認
+### 6. エラーレスポンスを確認
 
 期待値。
 
@@ -500,7 +552,7 @@ curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&th
 }
 ```
 
-### 6. メトリクスを確認
+### 7. メトリクスを確認
 
 ```powershell
 curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
@@ -512,13 +564,12 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 
 ## 今後の改善案
 
-現在は、`InvalidRagRequestException`、`ResourceAccessException`、その他の `Exception` を扱っている。
+現在は、`HttpMessageNotReadableException`、`InvalidRagRequestException`、`ResourceAccessException`、その他の `Exception` を扱っている。
 
 今後は、以下のようにエラー種別を増やすとよい。
 
 | 追加候補 | 目的 |
 |---|---|
-| JSON不正 | リクエストBodyの形式誤りを400で返す |
 | モデル名不正 | Ollamaにモデルがない場合のエラーを分かりやすく返す |
 | VectorStore未読み込み | Markdown未読み込み時に専用エラーを返す |
 | タイムアウト | AI応答が遅すぎる場合に504相当で返す |
@@ -532,6 +583,7 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 ```text
 サーバ側
   → 例外を共通的にJSONへ変換
+  → JSON不正は400として返す
   → 入力値不正は400として返す
   → AIサービス接続失敗は503として返す
 
