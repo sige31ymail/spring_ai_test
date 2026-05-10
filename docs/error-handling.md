@@ -15,6 +15,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 - Observabilityの `error` タグと突き合わせやすい
 - Ollama停止時などの障害原因を切り分けやすい
 - JSON不正や入力値不正を400 Bad Requestとして明確に返せる
+- VectorStore未読み込み状態を専用エラーとして返せる
 
 ---
 
@@ -24,6 +25,7 @@ Spring AI / RAG 処理で例外が発生したときに、Spring Boot標準の50
 |---|---:|---|---|
 | `HttpMessageNotReadableException` | 400 | `INVALID_REQUEST_BODY` | リクエストBodyのJSON形式が不正です。 |
 | `InvalidRagRequestException` | 400 | `INVALID_RAG_REQUEST` | 入力値に応じたエラーメッセージ |
+| `VectorStoreNotLoadedException` | 409 | `VECTOR_STORE_NOT_LOADED` | VectorStoreが読み込まれていません。Markdownを読み込むか、保存済みVectorStoreを読み込んでください。 |
 | `ResourceAccessException` | 503 | `AI_SERVICE_UNAVAILABLE` | AIサービスに接続できません。Ollamaが起動しているか確認してください。 |
 | `Exception` | 500 | `INTERNAL_SERVER_ERROR` | 予期しないエラーが発生しました。ログを確認してください。 |
 
@@ -82,6 +84,27 @@ public class InvalidRagRequestException extends RuntimeException {
 
 ---
 
+### VectorStoreNotLoadedException
+
+VectorStoreが未読み込みの状態で、検索やRAG回答を実行しようとした場合に投げる例外。
+
+```java
+package com.example.spring_ai_test;
+
+public class VectorStoreNotLoadedException extends RuntimeException {
+
+    public VectorStoreNotLoadedException(String message) {
+        super(message);
+    }
+}
+```
+
+この例外は、リクエスト形式は正しいが、現在のアプリ状態では処理できないことを表す。
+
+そのため、HTTPステータスは `409 Conflict` とする。
+
+---
+
 ### GlobalExceptionHandler
 
 `@RestControllerAdvice` を使って、Controller内で発生した例外を共通的に処理する。
@@ -113,6 +136,19 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ApiErrorResponse(
                         "INVALID_RAG_REQUEST",
+                        exception.getMessage()));
+    }
+
+    @ExceptionHandler(VectorStoreNotLoadedException.class)
+    public ResponseEntity<ApiErrorResponse> handleVectorStoreNotLoadedException(
+            VectorStoreNotLoadedException exception) {
+
+        logger.warn("VectorStore not loaded: {}", exception.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "VECTOR_STORE_NOT_LOADED",
                         exception.getMessage()));
     }
 
@@ -321,6 +357,47 @@ curl.exe -i `
 
 ---
 
+## VectorStore未読み込みの確認
+
+アプリを再起動し、まだ「Markdownを読み込む」または「保存済みVectorStoreを読み込む」を実行していない状態で検索する。
+
+```powershell
+curl.exe -i "http://localhost:8080/ai/rag/search-md-dir-simple?message=ToolContext&topK=10&threshold=0.0"
+```
+
+レスポンス。
+
+```json
+{
+  "code": "VECTOR_STORE_NOT_LOADED",
+  "message": "VectorStoreが読み込まれていません。Markdownを読み込むか、保存済みVectorStoreを読み込んでください。"
+}
+```
+
+HTTPステータスは `409 Conflict`。
+
+ファイル指定側でも同様。
+
+```powershell
+curl.exe -i "http://localhost:8080/ai/rag/search-md-file-simple?fileName=spring-ai-tools.md&message=ToolContext&topK=5&threshold=0.0"
+```
+
+その後、Markdownを読み込む。
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/load-md-dir"
+```
+
+または保存済みVectorStoreを読み込む。
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/load-store"
+```
+
+読み込み後に同じ検索を再実行し、通常通り検索結果が返ればOK。
+
+---
+
 ## ResourceAccessExceptionを個別に扱う理由
 
 Spring AIでOllamaに接続できない場合、`ResourceAccessException` が発生することがある。
@@ -397,14 +474,10 @@ if (errorData && errorData.message) {
 }
 ```
 
-そのため、JSON不正、Ollama停止、入力値不正時は画面に次のように表示される。
+そのため、JSON不正、入力値不正、VectorStore未読み込み、Ollama停止時は画面に次のように表示される。
 
 ```text
 エラーが発生しました: リクエストBodyのJSON形式が不正です。 (INVALID_REQUEST_BODY)
-```
-
-```text
-エラーが発生しました: AIサービスに接続できません。Ollamaが起動しているか確認してください。 (AI_SERVICE_UNAVAILABLE)
 ```
 
 ```text
@@ -412,7 +485,11 @@ if (errorData && errorData.message) {
 ```
 
 ```text
-エラーが発生しました: fileNameは spring-ai-notes.md, spring-ai-tools.md, spring-ai-rag.md のいずれかを指定してください。 (INVALID_RAG_REQUEST)
+エラーが発生しました: VectorStoreが読み込まれていません。Markdownを読み込むか、保存済みVectorStoreを読み込んでください。 (VECTOR_STORE_NOT_LOADED)
+```
+
+```text
+エラーが発生しました: AIサービスに接続できません。Ollamaが起動しているか確認してください。 (AI_SERVICE_UNAVAILABLE)
 ```
 
 ---
@@ -462,7 +539,7 @@ curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
 }
 ```
 
-JSON不正や入力値不正はAIモデル呼び出し前にControllerまたはSpring MVC層で止まるため、通常は `gen_ai.client.operation` には記録されない。
+JSON不正、入力値不正、VectorStore未読み込みはAIモデル呼び出し前に止まるため、通常は `gen_ai.client.operation` には記録されない。
 
 ---
 
@@ -521,13 +598,33 @@ curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&th
 curl.exe "http://localhost:8080/ai/rag/search-md-file-simple?fileName=unknown.md&message=ToolContext&topK=5&threshold=0.0"
 ```
 
-### 3. Ollama起動中の正常系
+### 3. VectorStore未読み込みを確認する
+
+アプリ再起動直後、Markdownや保存済みVectorStoreを読み込む前に実行する。
+
+```powershell
+curl.exe -i "http://localhost:8080/ai/rag/search-md-dir-simple?message=ToolContext&topK=10&threshold=0.0"
+```
+
+### 4. MarkdownまたはVectorStoreを読み込む
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/load-md-dir"
+```
+
+または、
+
+```powershell
+curl.exe "http://localhost:8080/ai/rag/load-store"
+```
+
+### 5. Ollama起動中の正常系
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 4. Ollama停止確認
+### 6. Ollama停止確認
 
 ```powershell
 curl.exe http://localhost:11434/api/tags
@@ -535,24 +632,13 @@ curl.exe http://localhost:11434/api/tags
 
 接続できなければOllama停止状態。
 
-### 5. Ollama停止中にRAG回答を呼ぶ
+### 7. Ollama停止中にRAG回答を呼ぶ
 
 ```powershell
 curl.exe "http://localhost:8080/ai/rag/ask-md-dir?message=ToolContext&topK=10&threshold=0.0"
 ```
 
-### 6. エラーレスポンスを確認
-
-期待値。
-
-```json
-{
-  "code": "AI_SERVICE_UNAVAILABLE",
-  "message": "AIサービスに接続できません。Ollamaが起動しているか確認してください。"
-}
-```
-
-### 7. メトリクスを確認
+### 8. メトリクスを確認
 
 ```powershell
 curl.exe http://localhost:8080/actuator/metrics/gen_ai.client.operation
@@ -564,14 +650,13 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
 
 ## 今後の改善案
 
-現在は、`HttpMessageNotReadableException`、`InvalidRagRequestException`、`ResourceAccessException`、その他の `Exception` を扱っている。
+現在は、`HttpMessageNotReadableException`、`InvalidRagRequestException`、`VectorStoreNotLoadedException`、`ResourceAccessException`、その他の `Exception` を扱っている。
 
 今後は、以下のようにエラー種別を増やすとよい。
 
 | 追加候補 | 目的 |
 |---|---|
 | モデル名不正 | Ollamaにモデルがない場合のエラーを分かりやすく返す |
-| VectorStore未読み込み | Markdown未読み込み時に専用エラーを返す |
 | タイムアウト | AI応答が遅すぎる場合に504相当で返す |
 
 ---
@@ -585,6 +670,7 @@ curl.exe http://localhost:8080/actuator/metrics/spring.ai.advisor
   → 例外を共通的にJSONへ変換
   → JSON不正は400として返す
   → 入力値不正は400として返す
+  → VectorStore未読み込みは409として返す
   → AIサービス接続失敗は503として返す
 
 UI側
