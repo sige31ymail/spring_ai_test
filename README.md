@@ -15,6 +15,7 @@ Spring Boot と Spring AI を使った学習用プロジェクトです。
 - RAG Chat Page
 - Observability / Actuator
 - Error Handling
+- Testing
 
 ## ドキュメント
 
@@ -22,3 +23,4 @@ Spring Boot と Spring AI を使った学習用プロジェクトです。
 - [RAG Chat Page](docs/rag-chat.md)
 - [Observability](docs/observability.md)
 - [Error Handling](docs/error-handling.md)
+- [Testing](docs/testing.md)
