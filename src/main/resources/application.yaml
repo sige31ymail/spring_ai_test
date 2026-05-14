@@ -1,6 +1,10 @@
 spring:
   application:
     name: spring_ai_test
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
   ai:
     ollama:
       base-url: http://localhost:11434

@@ -152,6 +152,12 @@
         <button type="button" id="loadPdfButton" onclick="loadPdf()">就業規則PDFを取り込む</button>
         <button type="button" onclick="callStoreEndpoint('/api/labor/load-store')">保存済みVectorStoreを読み込む</button>
         <button type="button" onclick="callStoreEndpoint('/api/labor/save-store')">VectorStoreを保存する</button>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+            <label style="font-size: 14px;"><strong>PDFアップロード</strong>（自社文書の追加）</label><br>
+            <input type="file" id="pdfFile" accept=".pdf" style="margin-top: 6px; font-size: 13px;">
+            <button type="button" id="uploadButton" onclick="uploadFile()"
+                style="margin-left: 6px; padding: 5px 12px; font-size: 13px;">アップロードして取り込む</button>
+        </div>
         <div id="storeStatus" class="store-status"></div>
     </div>
 
@@ -435,6 +441,49 @@
 
         function clearChat() {
             document.getElementById("chatBox").innerHTML = "";
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById("pdfFile");
+            const btn = document.getElementById("uploadButton");
+            const status = document.getElementById("storeStatus");
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("PDFファイルを選択してください。");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            btn.disabled = true;
+            btn.textContent = "取り込み中...";
+            status.textContent = `${file.name} を解析・埋め込み中です。しばらくお待ちください...`;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch("/api/labor/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => null);
+                    if (errorData && errorData.message) {
+                        throw new Error(`${errorData.message} (${errorData.code || response.status})`);
+                    }
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+
+                const text = await response.text();
+                status.textContent = text;
+                fileInput.value = "";
+            } catch (error) {
+                status.textContent = "エラーが発生しました: " + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "アップロードして取り込む";
+            }
         }
     </script>
 </body>

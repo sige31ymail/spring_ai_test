@@ -23,6 +23,7 @@ import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class LaborDocumentService {
@@ -31,7 +32,7 @@ public class LaborDocumentService {
     private static final String PDF_URL = "https://www.mhlw.go.jp/content/001620507.pdf";
     private static final String STORE_PATH = "data/labor-vector-store.json";
     private static final String SOURCE_TAG = "labor-pdf";
-    private static final String FILE_NAME = "就業規則モデル.pdf";
+    private static final String DEFAULT_FILE_NAME = "就業規則モデル.pdf";
 
     private final SimpleVectorStore laborVectorStore;
     private volatile boolean loaded = false;
@@ -75,59 +76,84 @@ public class LaborDocumentService {
         }
 
         try {
-            var config = PdfDocumentReaderConfig.builder()
-                    .withPageTopMargin(0)
-                    .withPagesPerDocument(1)
-                    .build();
-
-            var reader = new PagePdfDocumentReader(new FileSystemResource(tempPdf.toFile()), config);
-            List<Document> rawDocs = reader.get();
-            int pageCount = rawDocs.size();
-
-            logger.info("Labor PDF parsed: pages={}", pageCount);
-
-            List<Document> enrichedDocs = new ArrayList<>();
-            int skippedEmpty = 0;
-            for (int i = 0; i < rawDocs.size(); i++) {
-                Document doc = rawDocs.get(i);
-                String text = doc.getText();
-                if (text == null || text.isBlank()) {
-                    skippedEmpty++;
-                    continue;
-                }
-                Map<String, Object> meta = new HashMap<>(doc.getMetadata());
-                meta.put("source", SOURCE_TAG);
-                meta.put("pageNumber", String.valueOf(i + 1));
-                meta.put("fileName", FILE_NAME);
-                enrichedDocs.add(new Document(text, meta));
-            }
-
-            if (enrichedDocs.isEmpty()) {
-                return String.format("Labor PDF parsed but all %d pages had empty text. PDF may be image-based or encrypted.", pageCount);
-            }
-
-            logger.info("Labor PDF enriched: validPages={}, skippedEmpty={}, sampleText={}",
-                    enrichedDocs.size(), skippedEmpty,
-                    enrichedDocs.get(0).getText().substring(0, Math.min(100, enrichedDocs.get(0).getText().length())));
-
-
-            List<Document> chunks = new TokenTextSplitter()
-                    .apply(enrichedDocs);
-
-            int chunkCount = chunks.size();
-            logger.info("Labor PDF chunked: chunks={}", chunkCount);
-
-            laborVectorStore.add(chunks);
-
-            saveStore();
-            loaded = true;
-
-            logger.info("Labor PDF loaded and saved: pages={}, chunks={}", pageCount, chunkCount);
-            return String.format("Labor PDF loaded: pages=%d, chunks=%d", pageCount, chunkCount);
-
+            return processPdf(tempPdf, DEFAULT_FILE_NAME);
         } finally {
             Files.deleteIfExists(tempPdf);
         }
+    }
+
+    public String uploadPdf(MultipartFile file) throws IOException {
+
+        if (file == null || file.isEmpty()) {
+            throw new InvalidRagRequestException("アップロードするPDFファイルを選択してください。");
+        }
+
+        String originalFilename = file.getOriginalFilename() != null
+                ? file.getOriginalFilename()
+                : "uploaded.pdf";
+
+        if (!originalFilename.toLowerCase().endsWith(".pdf")) {
+            throw new InvalidRagRequestException("PDFファイルのみアップロードできます。");
+        }
+
+        logger.info("PDF upload received: fileName={}, size={} bytes", originalFilename, file.getSize());
+
+        Path tempPdf = Files.createTempFile("upload-", ".pdf");
+        try {
+            file.transferTo(tempPdf);
+            return processPdf(tempPdf, originalFilename);
+        } finally {
+            Files.deleteIfExists(tempPdf);
+        }
+    }
+
+    private String processPdf(Path pdfPath, String fileName) throws IOException {
+
+        var config = PdfDocumentReaderConfig.builder()
+                .withPageTopMargin(0)
+                .withPagesPerDocument(1)
+                .build();
+
+        var reader = new PagePdfDocumentReader(new FileSystemResource(pdfPath.toFile()), config);
+        List<Document> rawDocs = reader.get();
+        int pageCount = rawDocs.size();
+
+        logger.info("PDF parsed: fileName={}, pages={}", fileName, pageCount);
+
+        List<Document> enrichedDocs = new ArrayList<>();
+        int skippedEmpty = 0;
+        for (int i = 0; i < rawDocs.size(); i++) {
+            Document doc = rawDocs.get(i);
+            String text = doc.getText();
+            if (text == null || text.isBlank()) {
+                skippedEmpty++;
+                continue;
+            }
+            Map<String, Object> meta = new HashMap<>(doc.getMetadata());
+            meta.put("source", SOURCE_TAG);
+            meta.put("pageNumber", String.valueOf(i + 1));
+            meta.put("fileName", fileName);
+            enrichedDocs.add(new Document(text, meta));
+        }
+
+        if (enrichedDocs.isEmpty()) {
+            return String.format("[%s] 全 %d ページのテキスト抽出が空でした。スキャンPDFまたは暗号化されている可能性があります。",
+                    fileName, pageCount);
+        }
+
+        logger.info("PDF enriched: fileName={}, validPages={}, skippedEmpty={}",
+                fileName, enrichedDocs.size(), skippedEmpty);
+
+        List<Document> chunks = new TokenTextSplitter().apply(enrichedDocs);
+        int chunkCount = chunks.size();
+        logger.info("PDF chunked: fileName={}, chunks={}", fileName, chunkCount);
+
+        laborVectorStore.add(chunks);
+        loaded = true;
+        saveStore();
+
+        logger.info("PDF loaded and saved: fileName={}, pages={}, chunks={}", fileName, pageCount, chunkCount);
+        return String.format("[%s] 取り込み完了: %d ページ, %d チャンク", fileName, pageCount, chunkCount);
     }
 
     public String saveStore() throws IOException {
@@ -156,7 +182,7 @@ public class LaborDocumentService {
     void ensureLoaded() {
         if (!loaded) {
             throw new VectorStoreNotLoadedException(
-                    "Labor VectorStoreが読み込まれていません。PDFを取り込むか、保存済みVectorStoreを読み込んでください。");
+                    "Labor VectorStoreが読み込まれていません。PDFをアップロードするか、保存済みVectorStoreを読み込んでください。");
         }
     }
 }
