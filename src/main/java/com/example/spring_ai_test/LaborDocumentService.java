@@ -7,8 +7,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,11 +33,13 @@ public class LaborDocumentService {
     private static final Logger logger = LoggerFactory.getLogger(LaborDocumentService.class);
     private static final String PDF_URL = "https://www.mhlw.go.jp/content/001620507.pdf";
     private static final String STORE_PATH = "data/labor-vector-store.json";
+    private static final String FILES_PATH = "data/labor-files.txt";
     private static final String SOURCE_TAG = "labor-pdf";
     private static final String DEFAULT_FILE_NAME = "就業規則モデル.pdf";
 
     private final SimpleVectorStore laborVectorStore;
     private volatile boolean loaded = false;
+    private final List<String> loadedFileNames = new ArrayList<>();
 
     public LaborDocumentService(@Qualifier("laborVectorStore") SimpleVectorStore laborVectorStore) {
         this.laborVectorStore = laborVectorStore;
@@ -150,6 +154,9 @@ public class LaborDocumentService {
 
         laborVectorStore.add(chunks);
         loaded = true;
+
+        loadedFileNames.add(fileName);
+        saveFileNames();
         saveStore();
 
         logger.info("PDF loaded and saved: fileName={}, pages={}, chunks={}", fileName, pageCount, chunkCount);
@@ -171,18 +178,61 @@ public class LaborDocumentService {
         }
         laborVectorStore.load(path.toFile());
         loaded = true;
-        logger.info("Labor VectorStore loaded: path={}", path.toAbsolutePath());
+        loadFileNames();
+        logger.info("Labor VectorStore loaded: path={}, files={}", path.toAbsolutePath(), loadedFileNames);
         return "Labor VectorStore loaded from: " + path.toAbsolutePath();
+    }
+
+    public String clearStore() throws IOException {
+
+        // 空のJSONをロードしてメモリ上のVectorStoreをリセット
+        Path storePath = Path.of(STORE_PATH);
+        if (Files.exists(storePath)) {
+            Path emptyTemp = Files.createTempFile("empty-store-", ".json");
+            try {
+                Files.writeString(emptyTemp, "{}");
+                laborVectorStore.load(emptyTemp.toFile());
+            } finally {
+                Files.deleteIfExists(emptyTemp);
+            }
+            Files.deleteIfExists(storePath);
+        }
+
+        Files.deleteIfExists(Path.of(FILES_PATH));
+        loadedFileNames.clear();
+        loaded = false;
+
+        logger.info("Labor VectorStore cleared.");
+        return "VectorStoreをリセットしました。新しいPDFを取り込んでください。";
     }
 
     public boolean isLoaded() {
         return loaded;
     }
 
+    public List<String> getLoadedFileNames() {
+        return Collections.unmodifiableList(loadedFileNames);
+    }
+
     void ensureLoaded() {
         if (!loaded) {
             throw new VectorStoreNotLoadedException(
                     "Labor VectorStoreが読み込まれていません。PDFをアップロードするか、保存済みVectorStoreを読み込んでください。");
+        }
+    }
+
+    private void saveFileNames() throws IOException {
+        Path path = Path.of(FILES_PATH);
+        Files.createDirectories(path.getParent());
+        Files.write(path, loadedFileNames,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    private void loadFileNames() throws IOException {
+        Path path = Path.of(FILES_PATH);
+        if (Files.exists(path)) {
+            loadedFileNames.clear();
+            loadedFileNames.addAll(Files.readAllLines(path));
         }
     }
 }

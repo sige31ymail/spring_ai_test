@@ -152,12 +152,14 @@
         <button type="button" id="loadPdfButton" onclick="loadPdf()">就業規則PDFを取り込む</button>
         <button type="button" onclick="callStoreEndpoint('/api/labor/load-store')">保存済みVectorStoreを読み込む</button>
         <button type="button" onclick="callStoreEndpoint('/api/labor/save-store')">VectorStoreを保存する</button>
+        <button type="button" onclick="clearStore()" style="background:#ffe0e0;">VectorStoreをリセット</button>
         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
             <label style="font-size: 14px;"><strong>PDFアップロード</strong>（自社文書の追加）</label><br>
             <input type="file" id="pdfFile" accept=".pdf" style="margin-top: 6px; font-size: 13px;">
             <button type="button" id="uploadButton" onclick="uploadFile()"
                 style="margin-left: 6px; padding: 5px 12px; font-size: 13px;">アップロードして取り込む</button>
         </div>
+        <div id="fileList" style="margin-top:8px; font-size:13px; color:#333;"></div>
         <div id="storeStatus" class="store-status"></div>
     </div>
 
@@ -202,6 +204,7 @@
         }
 
         updateConversationDisplay();
+        refreshStatus();
 
         async function sendMessage() {
             const messageInput = document.getElementById("message");
@@ -358,6 +361,7 @@
                 btn.disabled = false;
                 btn.textContent = "就業規則PDFを取り込む";
             }
+            await refreshStatus();
         }
 
         async function callStoreEndpoint(path) {
@@ -378,6 +382,48 @@
             } catch (error) {
                 status.textContent = "エラーが発生しました: " + error.message;
             }
+            await refreshStatus();
+        }
+
+        async function clearStore() {
+            if (!confirm("VectorStoreをリセットします。\n取り込み済みの全PDFデータが削除されます。よろしいですか？")) {
+                return;
+            }
+            const status = document.getElementById("storeStatus");
+            status.textContent = "リセット中...";
+            try {
+                const response = await fetch("/api/labor/clear", { method: "POST" });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => null);
+                    if (errorData && errorData.message) {
+                        throw new Error(`${errorData.message} (${errorData.code || response.status})`);
+                    }
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                const text = await response.text();
+                status.textContent = text;
+            } catch (error) {
+                status.textContent = "エラーが発生しました: " + error.message;
+            }
+            await refreshStatus();
+        }
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch("/api/labor/status");
+                if (!response.ok) return;
+                const data = await response.json();
+                const fileListDiv = document.getElementById("fileList");
+                if (data.fileCount === 0) {
+                    fileListDiv.innerHTML = "<span style='color:#999;'>取り込み済みファイル: なし</span>";
+                } else {
+                    const items = data.files.map((f, i) =>
+                        `<span style="margin-right:12px;">📄 ${f}</span>`
+                    ).join("");
+                    fileListDiv.innerHTML =
+                        `<strong>取り込み済みファイル (${data.fileCount}件):</strong><br>${items}`;
+                }
+            } catch (_) { /* ignore */ }
         }
 
         async function searchOnly() {
@@ -506,6 +552,7 @@
                 btn.disabled = false;
                 btn.textContent = "アップロードして取り込む";
             }
+            await refreshStatus();
         }
     </script>
 </body>

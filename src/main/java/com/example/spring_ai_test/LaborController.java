@@ -71,10 +71,18 @@ public class LaborController {
         return laborRagService.search(message, topK, threshold);
     }
 
+    @PostMapping("/clear")
+    public String clear() throws IOException {
+        return laborDocumentService.clearStore();
+    }
+
     @GetMapping("/status")
     public java.util.Map<String, Object> status() {
+        java.util.List<String> files = laborDocumentService.getLoadedFileNames();
         return java.util.Map.of(
-                "loaded", laborDocumentService.isLoaded()
+                "loaded", laborDocumentService.isLoaded(),
+                "fileCount", files.size(),
+                "files", files
         );
     }
 
