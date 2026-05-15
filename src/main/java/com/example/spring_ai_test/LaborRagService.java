@@ -1,5 +1,6 @@
 package com.example.spring_ai_test;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,16 +27,19 @@ public class LaborRagService {
     private final SimpleVectorStore laborVectorStore;
     private final LaborDocumentService laborDocumentService;
     private final ChatMemory chatMemory;
+    private final LaborChatLogService chatLogService;
 
     public LaborRagService(
             ChatClient.Builder builder,
             @Qualifier("laborVectorStore") SimpleVectorStore laborVectorStore,
             LaborDocumentService laborDocumentService,
-            ChatMemory chatMemory) {
+            ChatMemory chatMemory,
+            LaborChatLogService chatLogService) {
         this.chatClient = builder.build();
         this.laborVectorStore = laborVectorStore;
         this.laborDocumentService = laborDocumentService;
         this.chatMemory = chatMemory;
+        this.chatLogService = chatLogService;
     }
 
     private OllamaChatOptions ragOptions() {
@@ -68,40 +72,57 @@ public class LaborRagService {
 
     public RagFileAnswerWithSources ask(String message, int topK, double threshold, String conversationId) {
 
+        long startMs = System.currentTimeMillis();
+
         List<RagFileSearchResult> sources = search(message, topK, threshold);
 
+        String answer;
         if (sources.isEmpty()) {
-            return new RagFileAnswerWithSources(
-                    "就業規則モデルには該当する記載が見つかりませんでした。", sources);
+            answer = "就業規則モデルには該当する記載が見つかりませんでした。";
+        } else {
+            String context = buildContext(sources);
+            answer = chatClient.prompt()
+                    .options(ragOptions())
+                    .advisors(
+                            MessageChatMemoryAdvisor.builder(chatMemory)
+                                    .conversationId(conversationId)
+                                    .build(),
+                            new SimpleLoggerAdvisor())
+                    .system("""
+                            あなたは就業規則・労務管理の専門アシスタントです。
+                            必ず提供された参考情報（厚生労働省の就業規則モデル）だけを根拠に回答してください。
+                            参考情報に記載のない事項は「就業規則モデルには記載がありません」と答えてください。
+                            回答は日本語で、簡潔かつ正確に答えてください。
+                            """)
+                    .user(u -> u
+                            .text("""
+                                    質問:
+                                    {message}
+
+                                    参考情報:
+                                    {context}
+                                    """)
+                            .param("message", message)
+                            .param("context", context))
+                    .call()
+                    .content();
         }
 
-        String context = buildContext(sources);
+        long elapsedMs = System.currentTimeMillis() - startMs;
 
-        String answer = chatClient.prompt()
-                .options(ragOptions())
-                .advisors(
-                        MessageChatMemoryAdvisor.builder(chatMemory)
-                                .conversationId(conversationId)
-                                .build(),
-                        new SimpleLoggerAdvisor())
-                .system("""
-                        あなたは就業規則・労務管理の専門アシスタントです。
-                        必ず提供された参考情報（厚生労働省の就業規則モデル）だけを根拠に回答してください。
-                        参考情報に記載のない事項は「就業規則モデルには記載がありません」と答えてください。
-                        回答は日本語で、簡潔かつ正確に答えてください。
-                        """)
-                .user(u -> u
-                        .text("""
-                                質問:
-                                {message}
-
-                                参考情報:
-                                {context}
-                                """)
-                        .param("message", message)
-                        .param("context", context))
-                .call()
-                .content();
+        try {
+            chatLogService.append(new LaborChatLogEntry(
+                    Instant.now().toString(),
+                    conversationId,
+                    message,
+                    answer,
+                    topK,
+                    threshold,
+                    sources.size(),
+                    elapsedMs));
+        } catch (Exception e) {
+            logger.warn("Failed to write chat log: {}", e.getMessage());
+        }
 
         return new RagFileAnswerWithSources(answer, sources);
     }

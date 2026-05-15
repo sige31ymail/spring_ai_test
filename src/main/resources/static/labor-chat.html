@@ -133,6 +133,45 @@
             font-size: 13px;
             color: #777;
         }
+
+        .log-panel {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+        }
+
+        .log-panel summary {
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 15px;
+            padding: 4px 0;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid #eee;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-meta {
+            color: #777;
+            margin-bottom: 2px;
+        }
+
+        .log-answer {
+            margin-top: 6px;
+            padding: 8px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-size: 13px;
+        }
     </style>
 </head>
 
@@ -188,6 +227,21 @@
     <button id="sendButton" onclick="sendMessage()">送信</button>
     <button type="button" onclick="searchOnly()">検索のみ</button>
     <button type="button" onclick="clearChat()">表示クリア</button>
+
+    <details id="logSection" class="log-panel" ontoggle="onLogToggle(this)">
+        <summary>📋 質問ログ <span id="logCountBadge" style="font-weight:normal; font-size:13px; color:#888;"></span></summary>
+        <div style="display:flex; align-items:center; gap:8px; margin: 10px 0 8px;">
+            <label style="font-size:13px;">
+                表示件数:
+                <input id="logLimit" type="number" value="20" min="1" max="200"
+                    style="width:60px; padding:4px; margin-right:0;">
+            </label>
+            <button type="button" onclick="loadLogs()" style="padding:5px 12px; font-size:13px; margin-top:0;">更新</button>
+            <button type="button" onclick="clearLogs()"
+                style="padding:5px 12px; font-size:13px; margin-top:0; background:#ffe0e0;">ログをクリア</button>
+        </div>
+        <div id="logContent" style="max-height:400px; overflow-y:auto;"></div>
+    </details>
 
     <script>
         let conversationId = crypto.randomUUID();
@@ -250,6 +304,11 @@
                 loadingElement.remove();
                 const elapsedSeconds = ((performance.now() - startTime) / 1000).toFixed(2);
                 appendAnswer(data, elapsedSeconds);
+
+                // ログパネルが開いていれば自動更新
+                if (document.getElementById("logSection").open) {
+                    await loadLogs();
+                }
 
             } catch (error) {
                 loadingElement.textContent = "エラーが発生しました: " + error.message;
@@ -509,6 +568,83 @@
 
         function clearChat() {
             document.getElementById("chatBox").innerHTML = "";
+        }
+
+        // ---- 質問ログ ----
+
+        function onLogToggle(details) {
+            if (details.open) loadLogs();
+        }
+
+        async function loadLogs() {
+            const limit = document.getElementById("logLimit").value || 20;
+            const content = document.getElementById("logContent");
+            content.textContent = "読み込み中...";
+            try {
+                const response = await fetch(`/api/labor/logs?limit=${encodeURIComponent(limit)}`);
+                if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+                const logs = await response.json();
+                renderLogs(logs);
+            } catch (error) {
+                content.textContent = "エラー: " + error.message;
+            }
+        }
+
+        function renderLogs(logs) {
+            const content = document.getElementById("logContent");
+            const badge = document.getElementById("logCountBadge");
+            badge.textContent = `(${logs.length}件)`;
+
+            if (logs.length === 0) {
+                content.textContent = "質問ログはありません。";
+                return;
+            }
+
+            content.innerHTML = "";
+            logs.forEach(log => {
+                const entry = document.createElement("div");
+                entry.className = "log-entry";
+
+                const ts = new Date(log.timestamp).toLocaleString("ja-JP");
+                const shortId = log.conversationId
+                    ? log.conversationId.substring(0, 8) + "..."
+                    : "-";
+                const shortQ = log.message && log.message.length > 50
+                    ? log.message.substring(0, 50) + "…"
+                    : (log.message || "");
+
+                const meta = document.createElement("div");
+                meta.className = "log-meta";
+                meta.textContent =
+                    `[${ts}]  会話: ${shortId}  参照: ${log.sourceCount}件  応答: ${(log.elapsedMs / 1000).toFixed(2)}秒`;
+                entry.appendChild(meta);
+
+                const details = document.createElement("details");
+                const summary = document.createElement("summary");
+                summary.style.cursor = "pointer";
+                summary.textContent = shortQ;
+                details.appendChild(summary);
+
+                const answer = document.createElement("div");
+                answer.className = "log-answer";
+                answer.textContent = log.answer || "";
+                details.appendChild(answer);
+
+                entry.appendChild(details);
+                content.appendChild(entry);
+            });
+        }
+
+        async function clearLogs() {
+            if (!confirm("質問ログをすべて削除します。よろしいですか？")) return;
+            try {
+                const response = await fetch("/api/labor/logs/clear", { method: "POST" });
+                if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+                document.getElementById("logContent").textContent = "質問ログをクリアしました。";
+                document.getElementById("logCountBadge").textContent = "(0件)";
+            } catch (error) {
+                alert("エラー: " + error.message);
+            }
         }
 
         async function uploadFile() {

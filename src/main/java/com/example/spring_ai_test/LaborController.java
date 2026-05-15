@@ -19,10 +19,15 @@ public class LaborController {
 
     private final LaborDocumentService laborDocumentService;
     private final LaborRagService laborRagService;
+    private final LaborChatLogService chatLogService;
 
-    public LaborController(LaborDocumentService laborDocumentService, LaborRagService laborRagService) {
+    public LaborController(
+            LaborDocumentService laborDocumentService,
+            LaborRagService laborRagService,
+            LaborChatLogService chatLogService) {
         this.laborDocumentService = laborDocumentService;
         this.laborRagService = laborRagService;
+        this.chatLogService = chatLogService;
     }
 
     @PostMapping("/load")
@@ -74,6 +79,18 @@ public class LaborController {
     @PostMapping("/clear")
     public String clear() throws IOException {
         return laborDocumentService.clearStore();
+    }
+
+    @GetMapping("/logs")
+    public List<LaborChatLogEntry> getLogs(
+            @RequestParam(defaultValue = "50") int limit) throws IOException {
+        return chatLogService.getLogs(limit);
+    }
+
+    @PostMapping("/logs/clear")
+    public String clearLogs() throws IOException {
+        chatLogService.clearLogs();
+        return "質問ログをクリアしました。";
     }
 
     @GetMapping("/status")
