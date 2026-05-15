@@ -53,10 +53,11 @@ public class LaborController {
         String message = request.message() != null ? request.message() : "";
         int topK = request.topK() != null ? request.topK() : 5;
         double threshold = request.threshold() != null ? request.threshold() : 0.0;
+        String conversationId = request.conversationId() != null ? request.conversationId() : "default";
 
         validateRequest(message, topK, threshold);
 
-        return laborRagService.ask(message, topK, threshold);
+        return laborRagService.ask(message, topK, threshold, conversationId);
     }
 
     @GetMapping("/search")

@@ -173,15 +173,36 @@
         </label>
     </div>
 
+    <div style="margin-bottom: 8px; font-size: 13px; color: #555;">
+        会話ID: <span id="conversationIdDisplay" style="font-family: monospace;"></span>
+        <button type="button" onclick="newConversation()"
+            style="margin-left: 12px; padding: 3px 10px; font-size: 12px;">新しい会話を始める</button>
+    </div>
+
     <div id="chatBox" class="chat-box"></div>
 
     <textarea id="message" placeholder="例: 年次有給休暇は何日取得できますか？"></textarea>
     <br>
     <button id="sendButton" onclick="sendMessage()">送信</button>
     <button type="button" onclick="searchOnly()">検索のみ</button>
-    <button type="button" onclick="clearChat()">履歴クリア</button>
+    <button type="button" onclick="clearChat()">表示クリア</button>
 
     <script>
+        let conversationId = crypto.randomUUID();
+
+        function updateConversationDisplay() {
+            document.getElementById("conversationIdDisplay").textContent =
+                conversationId.substring(0, 8) + "...";
+        }
+
+        function newConversation() {
+            conversationId = crypto.randomUUID();
+            updateConversationDisplay();
+            document.getElementById("chatBox").innerHTML = "";
+        }
+
+        updateConversationDisplay();
+
         async function sendMessage() {
             const messageInput = document.getElementById("message");
             const sendButton = document.getElementById("sendButton");
@@ -209,7 +230,8 @@
                     body: JSON.stringify({
                         message: message,
                         topK: Number(topK),
-                        threshold: Number(threshold)
+                        threshold: Number(threshold),
+                        conversationId: conversationId
                     })
                 });
 

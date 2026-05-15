@@ -7,7 +7,9 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -23,14 +25,17 @@ public class LaborRagService {
     private final ChatClient chatClient;
     private final SimpleVectorStore laborVectorStore;
     private final LaborDocumentService laborDocumentService;
+    private final ChatMemory chatMemory;
 
     public LaborRagService(
             ChatClient.Builder builder,
             @Qualifier("laborVectorStore") SimpleVectorStore laborVectorStore,
-            LaborDocumentService laborDocumentService) {
+            LaborDocumentService laborDocumentService,
+            ChatMemory chatMemory) {
         this.chatClient = builder.build();
         this.laborVectorStore = laborVectorStore;
         this.laborDocumentService = laborDocumentService;
+        this.chatMemory = chatMemory;
     }
 
     private OllamaChatOptions ragOptions() {
@@ -61,7 +66,7 @@ public class LaborRagService {
         return results;
     }
 
-    public RagFileAnswerWithSources ask(String message, int topK, double threshold) {
+    public RagFileAnswerWithSources ask(String message, int topK, double threshold, String conversationId) {
 
         List<RagFileSearchResult> sources = search(message, topK, threshold);
 
@@ -74,7 +79,11 @@ public class LaborRagService {
 
         String answer = chatClient.prompt()
                 .options(ragOptions())
-                .advisors(new SimpleLoggerAdvisor())
+                .advisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory)
+                                .conversationId(conversationId)
+                                .build(),
+                        new SimpleLoggerAdvisor())
                 .system("""
                         あなたは就業規則・労務管理の専門アシスタントです。
                         必ず提供された参考情報（厚生労働省の就業規則モデル）だけを根拠に回答してください。
